@@ -1,0 +1,22 @@
+{% extends "bulma/bulma.html" %}
+
+{% import "bulma/macros.html" as macros %}
+
+{% block content %}
+    <br><br><br><br><br><br><br><br><br><br>
+    <div class="columns is-centered">
+        <div class="column is-4">
+            <form id="login-form" method="post" autocomplete="off">
+                {% for field in form.values() %}
+                    {{ macros.render_field(field) }}
+                {% endfor %}
+                {% if feedback %}<p class="help">{{ feedback }}</p>{% endif %}
+                
+                <div class="field is-grouped">
+                    <div class="control"><input type="submit" class="button is-link" value="{{ submit[0] }}" formaction="{{ submit[1] }}"></div>
+                    {% if reset %}<div class="control"><input type="submit" class="button is-info is-light" value="{{ reset[0] }}" formaction="{{ reset[1] }}"></div>{% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}

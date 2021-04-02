@@ -1,0 +1,14 @@
+{% extends "base.html" %} 
+
+{% import "macros.html" as macros %}
+
+{% block content %}
+    {{ macros.render_tabs(tabs) }}
+    <form method="post" autocomplete="off">
+        <input type="hidden" id="csrf" name="csrf" value="{{ form.csrf }}"> 
+        {% for field in form.values() %}
+            {{ macros.render_field(field) }}
+        {% endfor %}
+        {{ macros.render_buttons(buttons) }}
+    </form>
+{% endblock %}

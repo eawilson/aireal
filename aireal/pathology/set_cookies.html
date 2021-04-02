@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="robots" content="noindex,nofollow">
+    </head>
+    <body>
+        <script>
+            const url = new URL(window.location.href);
+            const params = url.searchParams;
+            const cookies = JSON.parse(params.get("cookies"));
+            for(const key in cookies) {
+                var cookie = key+"="+encodeURIComponent(cookies[key])+"; samesite=lax";
+                document.cookie = coookie;
+                }
+            
+            window.location.replace(request.referrer);
+        </script>
+    </body>
+</html>
+
+
+
+
+
+destination
+cookie

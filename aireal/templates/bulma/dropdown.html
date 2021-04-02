@@ -1,0 +1,9 @@
+{% for item in items %}
+    {% if item.href %}
+        <a class="navbar-item" href="{{ item.href }}">{{ item.text }}</a>
+    {% elif item.divider %}
+        <div class="navbar-divider"></div>
+    {% else %}
+        <div class="navbar-item has-text-weight-bold">{{ item.text }}</div>
+    {% endif %}
+{% endfor %}

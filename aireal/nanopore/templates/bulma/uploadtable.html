@@ -1,0 +1,8 @@
+{% import "bulma/macros.html" as macros %}
+
+{{ macros.render_table(table) }}
+<p class="help is-danger">{{ form.error }}</p>
+{% if buttons.submit %}<input id="submit-button" class="button is-link" type="submit" value="{{ buttons.submit[0] }}" formaction="{{ buttons.submit[1] }}">{% endif %}
+{% if buttons.back %}<a class="button is-link" href="{{ buttons.back[1] }}">{{ buttons.back[0] }}</a>{% endif %}
+
+{% if modal %}{{ macros.render_modal(modal) }}{% endif %}

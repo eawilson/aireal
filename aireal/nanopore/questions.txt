@@ -1,0 +1,30 @@
+
+
+
+
+
+?bream
+
+?asic version
+
+what is a protocol?
+
+Protocol run vs acquisitio run?
+
+sample_id is this the run name? How is it generated? Is it unique?
+
+files in fallback? (fastq_files_in_fallback=0)
+
+failed files?
+
+Does it ever fail and if so can it be rerun?
+
+?is this the command line? protocol=sequencing/sequencing_MIN106_DNA:FLO-MIN106:SQK-LSK109:True
+
+
+
+
+
+
+
+

@@ -1,0 +1,12 @@
+{% extends "base.html" %} 
+
+{% import "macros.html" as macros %}
+
+{% block content %}
+    
+    {{ macros.render_tabs(table.tabs) }}
+    {{ macros.render_buttons(table.toolbar) }}
+    {{ macros.render_table(table) }}
+    {{ macros.render_buttons(buttons) }}
+
+{% endblock %}

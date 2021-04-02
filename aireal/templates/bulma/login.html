@@ -1,0 +1,41 @@
+{% extends "bulma/base.html" %}
+
+{% import "bulma/macros.html" as macros %}
+
+{% block content %}
+
+    <div class="columns">
+        <div class="column is-8 is-offset-2">
+            <img class="is-rounded" src="{{ url_for('static', filename='images/aireal.png') }}">
+        </div>
+    </div>
+            
+    <div class="columns is-centered">
+        <div class="column is-4">
+            {{ form }}
+                {% for field in form.values() %}
+                    {{ macros.render_field(field) }}
+                {% endfor %}
+                {% if feedback %}<p class="help">{{ feedback }}</p>{% endif %}
+                
+                <div class="field is-grouped">
+                    <div class="control"><input type="submit" class="button is-link" value="{{ submit[0] }}" formaction="{{ submit[1] }}"></div>
+                    {% if reset %}<div class="control"><a class="button is-info is-light" href="{{ reset[1] }}">{{ reset[0] }}</a></div>{% endif %}
+                    {% if back %}<div class="control"><a class="button is-link" href="{{ back[1] }}">{{ back[0] }}</a></div>{% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        // Set local timezone on login to enable local correction of server UTC.
+        defer( function() {
+            $('form').on('submit', function() {
+                const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                $("input[name='timezone']").val(tz);
+                });
+            });
+        //# sourceURL=login.js
+    </script>
+    
+{% endblock %}

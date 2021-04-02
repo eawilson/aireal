@@ -1,0 +1,27 @@
+{% extends "bulma/bulma.html" %} 
+
+{% block content %}
+    
+    <table class="table is-striped is-fullwidth is-sortable">
+        <thead>
+            <tr>
+                {% for col in table.head %}
+                    <th>{{ col }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for row, attr in table.body %}
+                <tr {% if attr.deleted %}class="deleted"{% endif %} {% if attr.href %} data-href="{{ attr.href }}"{% endif %}>
+                    {% for col in row %}
+                        <td{% if col.value %} data-sort-value="{{ col.value }}"{% endif %}>{{ col }}</td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if cancel %}<a class="button is-link" href="{{ cancel[1] }}">{{ cancel[0] }}</a>{% endif %}
+    
+{% endblock %}

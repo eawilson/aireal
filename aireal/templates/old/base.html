@@ -1,0 +1,79 @@
+{% import "macros.html" as macros %}
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <!-- Required meta tags -->
+        <meta charset="utf-8">
+        <meta name="robots" content="noindex,nofollow">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+        <!-- Bootstrap CSS -->
+        <link rel="stylesheet" href="{{ url_for('core.static', filename='css/jquery-ui-1.12.icon-font.min.css') }}">
+        <link rel="stylesheet" href="{{ url_for('core.static', filename='css/bootstrap-4.3.1.min.css') }}">
+        <link rel="stylesheet" href="{{ url_for('core.static', filename='css/integrated.css') }}">
+    
+        <title>{{ navbar.title }}</title>
+    </head>
+
+    <body>
+  
+        <nav class="navbar navbar-expand-sm navbar-dark fixed-top bg-dark" ondragstart="return false;">
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#toolbartoggler">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <a class="navbar-brand" href="#">{{ navbar.title }}</a>
+
+            <div class="collapse navbar-collapse" id="toolbartoggler">
+                <ul class="navbar-nav mr-auto">
+                    {% for item in navbar.menuitems %}
+                        <li class="nav-item {% if item.text == navbar.active  %}active{% endif %}">
+                            <a class="nav-link" href="{{ item.href }}">{{ item.text  }}</a>
+                        </li>
+                    {% endfor %}
+                </ul>
+                
+                <ul class="navbar-nav ml-auto">
+                    <li>
+                        <span class="navbar-text">{{ navbar.site }}</span>
+                    </li>
+                    <li class="nav-item dropdown" id="logout-menu" data-href="{{ url_for('auth.logout_menu') }}">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown">
+                            <i class="ui-icon ui-icon-logout" id="logout-icon"></i>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-right"></div>
+                    </li>
+                        
+                </ul>
+            </div>
+        </nav>
+
+        <div class="container-fluid">
+
+            <div  ondragstart="return false;">
+                {{ macros.render_table(demographics) }}
+
+                {{ macros.render_title(title) }}
+                
+            {% if dragable is defined %}</div>{% endif %}
+            
+            {% block content %}
+            {% endblock %}
+
+            {% if dragable is undefined %}</div>{% endif %}
+
+        </div>
+                    
+        <!-- JavaScript -->
+        <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+        <script src="{{ url_for('core.static', filename='js/jquery-3.3.1.min.js') }}"></script>
+        <script src="{{ url_for('core.static', filename='js/bootstrap-4.3.1.bundle.min.js') }}"></script>
+        <script src="{{ url_for('core.static', filename='js/autoresize-1.04.js') }}"></script>
+        <!script src="{{ url_for('static', filename='js/jquery.auto-complete.min.js') }}"><!/script>
+        <script src="{{ url_for('core.static', filename='js/integrated.js') }}"></script>
+        
+        {% block script %}
+        {% endblock %}
+        
+    </body>
+</html>

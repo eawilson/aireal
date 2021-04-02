@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="robots" content="noindex,nofollow">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <!--title></title-->
+        
+        <link rel="stylesheet" href="{{ url_for('core.static', filename='css/bulma.min-0.8.0.css') }}">
+        <link rel="stylesheet" href="{{ url_for('core.static', filename='css/limscore-bulma.css') }}">
+        <link rel="stylesheet" href="{{ url_for('core.static', filename='css/fontawesome-free-5.12.1-web.min.css') }}">
+    </head>
+
+    <body class="has-navbar-fixed-top">
+        <nav class="navbar is-fixed-top is-dark">
+            <div class="navbar-brand">
+                <div class="navbar-item is-size-5">{{ navbar.app }}</div>
+                <div class="navbar-item is-size-5">{{ navbar.section }}</div>
+            </div>
+
+            <div class="navbar-menu is-active has-background-grey-dark">
+                {% if navbar.left %}
+                    <div class="navbar-start">
+                        {% for item in navbar.left %}
+                            {% if item.dropdown %}
+                                <div class="navbar-item has-dropdown is-hoverable" data-href="{{ item.href }}">
+                                    <a class="navbar-link">{{ item.text }}</a>
+                                    <div class="navbar-dropdown"></div>
+                                </dev>
+                            {% else %}
+                                <a class="navbar-item{% if item.text == navbar.active %} is-active{% endif %}" href="{{ item.href }}">{{ item.text }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% if navbar.right %}
+                    <div class="navbar-end">
+                        {% for item in navbar.right %}
+                            {% if item.dropdown %}
+                                <div class="navbar-item has-dropdown is-hoverable" data-href="{{ item.href }}">
+                                    <a class="navbar-link">{{ item.text }}</a>
+                                    <div class="navbar-dropdown is-right "></div>
+                                </dev>
+                            {% else %}
+                                <a class="navbar-item{% if item.text == navbar.active %} is-active{% endif %}" href="{{ item.href }}">{{ item.text }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </nav>
+        
+        <div>
+            <span>{{ title }}</span>
+            {% if info %}<a class="button is-info is-light is-pulled-right is-small" href="{{ info[1] }}">{{ info[0] }}</a>{% endif %}
+        </div>
+        
+        {% if tabs %}
+            <div class="tabs is-boxed">
+                <ul>
+                    {% for item in tabs %}
+                        {% if item.active %}
+                            <li class="is-active">{{ item.text }}{% if item.badge %}<span class="tag is-dark">{{ item.badge }}</span>{% endif %}</li>
+                        {% else %}
+                            <li><a href="{{ item.href }}">{{ item.text }}{% if tab.badge %}<span class="tag is-dark">{{ tab.badge }}</span>{% endif %}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+        
+        {% if new %}
+            <a class="icon" href="{{ new[1] }}"><i class="fas fa-plus"></i></a>
+        {% endif %}
+        
+        {% block content %}
+        {% endblock %}
+
+        <!-- JavaScript -->
+        <script src="{{ url_for('core.static', filename='js/jquery-3.4.1.min.js') }}"></script>
+        <script src="{{ url_for('core.static', filename='js/jquery.tablesort-0.0.11.min.js') }}"></script>
+        <script src="{{ url_for('core.static', filename='js/limscore.js') }}"></script>
+         
+        {% block script %}
+        {% endblock %}
+        
+    </body>
+</html>

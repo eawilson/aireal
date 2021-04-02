@@ -1,0 +1,12 @@
+{% extends "bulma/base.html" %} 
+
+{% block content %}
+    
+    {% for row in text %}
+        {{ row }}<br>
+    {% endfor %}
+    
+    {% if buttons and buttons.external %}<a class="button is-link" href="{{ buttons.external[1] }}" target="_blank" rel="noopener noreferrer">{{ buttons.external[0] }}</a>{% endif %}
+    {% if buttons and buttons.back %}<a class="button is-link" href="{{ buttons.back[1] }}">{{ buttons.back[0] }}</a>{% endif %}
+    
+{% endblock %}

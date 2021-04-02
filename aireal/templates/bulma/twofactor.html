@@ -1,0 +1,8 @@
+{% extends "bulma/base.html" %} 
+
+{% import "bulma/macros.html" as macros %}
+
+{% block content %}
+    <div><img id="qrcode" src="{{ qrcode_url }}"></div>
+    {{ macros.render_form(form, buttons) }}
+{% endblock %}

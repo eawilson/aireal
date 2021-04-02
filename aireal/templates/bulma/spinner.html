@@ -1,0 +1,13 @@
+{% extends "bulma/base.html" %} 
+
+{% block content %}
+    <div class="spinner"></div>
+{% endblock %}
+
+{% block script %}
+    $(function () {    
+        $.get("{{ url }}", function(data) {
+            $("html").html(data);
+            });
+        });
+{% endblock %}

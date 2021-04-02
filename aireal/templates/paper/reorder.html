@@ -1,0 +1,49 @@
+{% extends "base.html" %} 
+
+{% import "macros.html" as macros %}
+
+{% set dragable = True %}
+
+{% block content %}
+    <br>
+    <ul class="list-group col-sm-4" id="list1">
+        {% for item in items %}
+            <li class="list-group-item">{{ item }}</li>
+        {% endfor %}
+    </ul>
+    <br>
+    
+    <div  ondragstart="return false;">
+        <form method="post" autocomplete="off">
+            <input type="hidden" id="csrf" name="csrf" value="{{ form.csrf }}"> 
+            {% for field in form.values() %}
+                {{ macros.render_field(field) }}
+            {% endfor %}
+            {{ macros.render_buttons(buttons) }}
+        </form>
+    </div>
+{% endblock %}
+
+{% block script %}
+    <script src="{{ url_for('core.static', filename='js/Sortable-1.10.0.min.js') }}"></script>
+    <script src="{{ url_for('core.static', filename='js/jquery-sortable-1.0.1.js') }}"></script>
+
+    <script>
+            $(function () {    
+                $('#list1').
+                    sortable({
+                        animation: 150,
+                        ghostClass: 'list-group-item-secondary'
+                        });
+            
+                $('form').on('submit', function(e){
+                    var data = "";
+                    $('#list1 li').each(function (){
+                        data += this.textContent + ",";
+                        });
+                    $('#order').val(data);
+                    });
+            
+                });
+    </script>
+{% endblock %}

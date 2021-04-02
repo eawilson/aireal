@@ -1,0 +1,68 @@
+{% extends "bulma/base.html" %} 
+
+{% import "bulma/macros.html" as macros %}
+
+{% block content %}
+
+    {{ form }}
+        <div class="columns">
+            <div class="column is-three-quaters">
+            {% for field in form.values() %}
+                {{ macros.render_field(field) }}
+            {% endfor %}
+        </div>
+    </form>
+    
+   <progress id="progress" max="1" value="0">0%</progress>
+
+    
+    {{ macros.render_buttons2(buttons) }}
+   
+{% endblock %}
+
+
+
+{% block script %}
+
+    <script>
+        var currentRequest = null;
+
+        $(function () {
+            $('#files').on('change', function() {
+            
+                const files = document.getElementById('files').files;
+                let file;
+                const sizes = {};
+                for (var i = 0; i < files.length; i++) {
+                    file = files[i];
+                    sizes[file.webkitRelativePath] = file.size;
+                    };
+                $('#sizes').val(JSON.stringify(sizes));
+                        
+                var form = $('form')[0];
+                var data = new FormData(form);
+                currentRequest = $.ajax({
+                    type: "POST",
+                    enctype: 'multipart/form-data',
+                    url: $('form').attr('data-href'),
+                    dataType: 'json',
+                    data: data,
+                    processData: false,  // Important!
+                    cache: false,            
+                    contentType: false,
+                    beforeSend : function()    {
+                        if(currentRequest != null) {
+                            currentRequest.abort();
+                            }
+                        },
+                    success: function (data) {
+                        currentRequest = null;
+                        $('#title').text(data.title);
+                        $('#part-2').html(data.body);
+                        }
+                    });
+                });
+
+            });
+    </script>
+{% endblock %}

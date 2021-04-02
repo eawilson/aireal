@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="robots" content="noindex,nofollow">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <!--title></title-->
+        
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/bulma/bulma.0.9.0.min.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome-free-5.12.1-web.min.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/bulma/jquery.contextMenu.2.7.0.min.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/bulma/aireal-bulma.css') }}">
+
+        <script src="{{ url_for('static', filename='js/jquery-3.5.1.min.js') }}" defer></script>
+        <script src="{{ url_for('static', filename='js/jquery.tablesort-0.0.11.min.js') }}" defer></script>
+        <script src="{{ url_for('static', filename='js/jquery.ui.position.1.12.1.js') }}" defer></script>
+        <script src="{{ url_for('static', filename='js/jquery.contextMenu.2.7.1.min.js') }}" defer></script>
+        <script src="{{ url_for('static', filename='js/aireal.js') }}"></script>
+    </head>
+
+    <body class="has-navbar-fixed-top">
+        <nav class="navbar is-fixed-top is-dark">
+            <div class="navbar-brand">
+                <div id="logo" class="navbar-item is-size-5">{{ navbar.app }}</div>
+                <div class="navbar-item is-size-5">{{ navbar.name }}</div>
+            </div>
+
+            <div class="navbar-menu is-active has-background-grey-dark">
+                {% if navbar.left %}
+                    <div class="navbar-start">
+                        {% for item in navbar.left %}
+                            {% if item.dropdown %}
+                                <div class="navbar-item has-dropdown is-hoverable" data-href="{{ item.href }}">
+                                    <a class="navbar-link">{{ item.text }}</a>
+                                    <div class="navbar-dropdown"></div>
+                                </div>
+                            {% else %}
+                                <a class="navbar-item{% if item.text == navbar.active %} is-active{% endif %}" href="{{ item.href }}">{{ item.text }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% if navbar.right %}
+                    <div class="navbar-end">
+                        {% for item in navbar.right %}
+                            {% if item.dropdown %}
+                                <div class="navbar-item has-dropdown is-hoverable" data-href="{{ item.href }}">
+                                    <a class="navbar-link">{{ item.text }}</a>
+                                    <div class="navbar-dropdown is-right "></div>
+                                </div>
+                            {% else %}
+                                <a class="navbar-item{% if item.text == navbar.active %} is-active{% endif %}" href="{{ item.href }}">{{ item.text }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </nav>
+        
+        <section class="main-section">
+            <div>
+                <span id="title">{{ title }}</span>
+                {% if buttons and buttons.info %}<a class="button is-info is-light is-pulled-right is-small" href="{{ buttons.info[1] }}">{{ buttons.info[0] }}</a>{% endif %}
+            </div>
+            
+            {% if tabs %}
+                <div class="tabs is-boxed">
+                    <ul>
+                        {% for tab in tabs %}
+                            {% if tab.active %}
+                                <li class="is-active"><a href="#">{{ tab.text }}{% if tab.badge %}<span class="tag is-dark">{{ tab.badge }}</span>{% endif %}</a></li>
+                            {% else %}
+                                <li><a href="{{ tab.href }}">{{ tab.text }}{% if tab.badge %}<span class="tag is-dark">{{ tab.badge }}</span>{% endif %}</a></li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+            
+            {% if buttons and buttons.new %}<a class="icon" href="{{ buttons.new[1] }}"><i class="fas fa-plus"></i></a>{% endif %}
+            
+            {% block content %}
+            {% endblock %}
+        </section>
+        
+        {{ action_form }}<input id="action" type="hidden" name="action" value=""></form>
+    </body>
+</html>

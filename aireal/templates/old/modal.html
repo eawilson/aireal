@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% import "macros.html" as macros %}
+
+{% block content %}
+
+    <br>
+    
+    {% for text in message %}
+        <h5>{{ text }}</h5><br>
+    {% endfor %}
+
+    {% for text in details %}
+        {{ text }}<br>
+    {% endfor %}
+    
+    <form method="post" autocomplete="off">
+        <input type="hidden" id="csrf" name="csrf" value="{{ form.csrf }}"> 
+        {{ macros.render_buttons(buttons) }}
+    </form>
+    
+{% endblock %}

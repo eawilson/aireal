@@ -1,0 +1,445 @@
+﻿# French translations for PROJECT.
+# Copyright (C) 2020 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2020.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2020-04-13 13:27+0100\n"
+"PO-Revision-Date: 2020-04-12 20:11+0100\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: fr\n"
+"Language-Team: fr <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n > 1)\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.8.0\n"
+
+#: /home/ed/Software/aireal/aireal/admin.py:29
+msgid "Users"
+msgstr "Utilisateurs"
+
+#: /home/ed/Software/aireal/aireal/admin.py:30
+#: /home/ed/Software/limscore/limscore/admin.py:193
+#: /home/ed/Software/limscore/limscore/crud.py:292
+msgid "Edit"
+msgstr "Modifier"
+
+#: /home/ed/Software/aireal/aireal/admin.py:37
+#: /home/ed/Software/limscore/limscore/forms.py:62
+msgid "Projects"
+msgstr "Projets"
+
+#: /home/ed/Software/aireal/aireal/admin.py:38
+#: /home/ed/Software/limscore/limscore/forms.py:60
+msgid "Sites"
+msgstr "Locations"
+
+#: /home/ed/Software/aireal/aireal/admin.py:39
+msgid "Tables"
+msgstr "Base de données"
+
+#: /home/ed/Software/aireal/aireal/admin.py:47
+#: /home/ed/Software/aireal/aireal/admin.py:63
+#: /home/ed/Software/aireal/aireal/forms.py:25
+#: /home/ed/Software/aireal/aireal/forms.py:31
+#: /home/ed/Software/limscore/limscore/admin.py:210
+#: /home/ed/Software/limscore/limscore/admin.py:219
+msgid "Name"
+msgstr "Nom"
+
+#: /home/ed/Software/aireal/aireal/bioinformatics.py:28
+msgid "Files"
+msgstr "Fichiers"
+
+#: (copy).py:251 (copy).py:254 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:265
+#: /home/ed/Software/aireal/aireal/basespace/views.py:269
+#: /home/ed/Software/aireal/aireal/bioinformatics.py:30
+msgid "Import"
+msgstr "Importer"
+
+#: (copy).py:31 (copy).py:78 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:46
+#: /home/ed/Software/aireal/aireal/basespace/views.py:71
+#: /home/ed/Software/aireal/aireal/bioinformatics.py:39
+msgid "BaseSpace"
+msgstr "BaseSpace"
+
+#: /home/ed/Software/aireal/aireal/bioinformatics.py:40
+msgid "Nanopore"
+msgstr "Nanopore"
+
+#: (copy).py:49 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/bioinformatics.py:53
+msgid "Accounts"
+msgstr "Comptes Utilisateurs"
+
+#: /home/ed/Software/aireal/aireal/forms.py:32
+msgid "Subject Attributes"
+msgstr "Caractéristiques du Sujet"
+
+#: /home/ed/Software/aireal/aireal/forms.py:33
+msgid "Sample Attributes"
+msgstr "Caractéristiques de l'Échantillon"
+
+#: /home/ed/Software/aireal/aireal/forms.py:34
+msgid "Default Pipeline"
+msgstr "Pipeline par Défaut"
+
+#: /home/ed/Software/aireal/aireal/forms.py:35
+msgid "Default Pipeline Options"
+msgstr "Options du Pipeline par Défaut"
+
+#: /home/ed/Software/aireal/aireal/basespace/forms.py:23
+msgid "No samples selected."
+msgstr "Pas d'échantillon sélectionné."
+
+#: (copy).py:76 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:69
+msgid "Please follow link to Basespace and authenticate."
+msgstr "Veuillez suivre le lien pour accéder à BaseSpace et vous identifier."
+
+#: (copy).py:77 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:70
+msgid ""
+"For Basespace Enterprise please ensure you are logged into the the "
+"correct workgroup before clicking link."
+msgstr "Pour BaseSpace Enterprise, veuillez vous assurer que vous êtes connectés au bon groupe de travail avant de cliquer sur le lien."
+
+#: (copy).py:81 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:74
+msgid "Server busy, please try again in 2 minutes time."
+msgstr "Serveur occuppé, veuillez rééssayer dans 2 minutes."
+
+#: (copy).py:171 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:166
+#: /home/ed/Software/aireal/aireal/nanopore/views.py:51
+msgid "Run"
+msgstr "Lancer"
+
+#: (copy).py:171 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:166
+#: /home/ed/Software/aireal/aireal/nanopore/views.py:51
+msgid "Platform"
+msgstr "Plateforme"
+
+#: (copy).py:171 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:166
+#: /home/ed/Software/aireal/aireal/nanopore/views.py:51
+msgid "Machine"
+msgstr "Instrument"
+
+#: (copy).py:171 (copy).py:249 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:166
+#: /home/ed/Software/aireal/aireal/basespace/views.py:261
+#: /home/ed/Software/aireal/aireal/nanopore/views.py:51
+msgid "Status"
+msgstr "État"
+
+#: (copy).py:171 (copy).py:249 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:166
+#: /home/ed/Software/aireal/aireal/basespace/views.py:261
+#: /home/ed/Software/aireal/aireal/nanopore/views.py:51
+#: /home/ed/Software/limscore/limscore/admin.py:81
+msgid "Date"
+msgstr "Date"
+
+#: (copy).py:176 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:53
+#: /home/ed/Software/aireal/aireal/basespace/views.py:171
+#: /home/ed/Software/aireal/aireal/basespace/views.py:266
+#: /home/ed/Software/limscore/limscore/admin.py:85
+#: /home/ed/Software/limscore/limscore/crud.py:161
+#: /home/ed/Software/limscore/limscore/crud.py:195
+msgid "Back"
+msgstr "Retour"
+
+#: (copy).py:249 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:261
+msgid "Sample"
+msgstr "Échantillon"
+
+#: (copy).py:249 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:261
+msgid "Reads PF"
+msgstr "Nombre de Reads PF"
+
+#: (copy).py:249 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:261
+msgid "Application"
+msgstr "Application"
+
+#: (copy).py:249 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:261
+msgid "Project"
+msgstr "Projet"
+
+#: (copy).py:252 (copy).py:254 /home/ed/Software/aireal/aireal/basespace/views
+#: /home/ed/Software/aireal/aireal/basespace/views.py:269
+#: /home/ed/Software/aireal/aireal/nanopore/views.py:68
+#: /home/ed/Software/limscore/limscore/admin.py:195
+#: /home/ed/Software/limscore/limscore/auth.py:486
+#: /home/ed/Software/limscore/limscore/crud.py:294
+msgid "Cancel"
+msgstr "Annuler"
+
+#: (copy).py:253 /home/ed/Software/aireal/aireal/basespace/views
+msgid "Are you sure you want to upload these samples?"
+msgstr "Êtes-vous sûr de vouloir importer ces échantillons?"
+
+#: /home/ed/Software/aireal/aireal/basespace/views.py:43
+msgid "Account"
+msgstr "Compte Utilisateur"
+
+#: /home/ed/Software/aireal/aireal/basespace/views.py:76
+msgid "Unable to connect to deamon."
+msgstr "Impossible de se connecter au serveur."
+
+#: /home/ed/Software/aireal/aireal/basespace/views.py:166
+#: /home/ed/Software/aireal/aireal/nanopore/views.py:51
+msgid "Uploaded"
+msgstr "Importé"
+
+#: /home/ed/Software/aireal/aireal/basespace/views.py:247
+msgid "Project must be selected before uploading."
+msgstr "Un projet doit être sélectionné avant d'être importé."
+
+#: /home/ed/Software/aireal/aireal/basespace/views.py:264
+msgid "Are you sure you want to upload these samples to {}?"
+msgstr "Êtes-vous sûr de vouloir importer vos échantillons vers {}?"
+
+#: /home/ed/Software/aireal/aireal/nanopore/forms.py:8
+msgid "Select Run Folder to Upload"
+msgstr "Veuillez sélectionner le dossier à importer"
+
+#: /home/ed/Software/aireal/aireal/nanopore/views.py:55
+msgid "Nanopore"
+msgstr "Nanopore"
+
+#: /home/ed/Software/limscore/limscore/admin.py:81
+msgid "Action"
+msgstr "Action"
+
+#: /home/ed/Software/limscore/limscore/admin.py:81
+msgid "Details"
+msgstr "Description"
+
+#: /home/ed/Software/limscore/limscore/admin.py:81
+msgid "User"
+msgstr "Utilisateur"
+
+#: /home/ed/Software/limscore/limscore/admin.py:86
+msgid "Audit Trail"
+msgstr "Audit"
+
+#: /home/ed/Software/limscore/limscore/admin.py:187
+#: /home/ed/Software/limscore/limscore/crud.py:280
+msgid "Must be unique."
+msgstr "Doit être unique."
+
+#: /home/ed/Software/limscore/limscore/admin.py:189
+#: /home/ed/Software/limscore/limscore/admin.py:197
+#: /home/ed/Software/limscore/limscore/crud.py:296
+msgid "Restore"
+msgstr "Restaurer"
+
+#: /home/ed/Software/limscore/limscore/admin.py:193
+#: /home/ed/Software/limscore/limscore/crud.py:292
+msgid "New"
+msgstr "Nouveau"
+
+#: /home/ed/Software/limscore/limscore/admin.py:194
+#: /home/ed/Software/limscore/limscore/auth.py:485
+#: /home/ed/Software/limscore/limscore/crud.py:194
+#: /home/ed/Software/limscore/limscore/crud.py:293
+msgid "Save"
+msgstr "Sauvegarder"
+
+#: /home/ed/Software/limscore/limscore/admin.py:197
+#: /home/ed/Software/limscore/limscore/crud.py:296
+msgid "Delete"
+msgstr "Supprimer"
+
+#: /home/ed/Software/limscore/limscore/admin.py:202
+#: /home/ed/Software/limscore/limscore/crud.py:301
+msgid "History"
+msgstr "Historique"
+
+#: /home/ed/Software/limscore/limscore/admin.py:220
+#: /home/ed/Software/limscore/limscore/forms.py:34
+#: /home/ed/Software/limscore/limscore/forms.py:58
+msgid "Email"
+msgstr "E-mail"
+
+#: /home/ed/Software/limscore/limscore/admin.py:221
+#: /home/ed/Software/limscore/limscore/forms.py:59
+msgid "Groups"
+msgstr "Groupes"
+
+#: /home/ed/Software/limscore/limscore/auth.py:114
+msgid "Invalid credentials."
+msgstr "Références invalides"
+
+#: /home/ed/Software/limscore/limscore/auth.py:183
+msgid "Please check your inbox for password reset email."
+msgstr ""
+"Veuillez vérifier votre boite de réception pour le lien de changement de "
+"mot passe"
+
+#: /home/ed/Software/limscore/limscore/auth.py:205
+msgid "Change Role"
+msgstr "Changer de Rôle"
+
+#: /home/ed/Software/limscore/limscore/auth.py:212
+msgid "Change Language"
+msgstr "Changer de Langue"
+
+#: /home/ed/Software/limscore/limscore/auth.py:216
+msgid "Change Password"
+msgstr "Changer le Mot de Passe"
+
+#: /home/ed/Software/limscore/limscore/auth.py:217
+msgid "Two Factor Auth"
+msgstr "Authentification à 2 facteurs"
+
+#: /home/ed/Software/limscore/limscore/auth.py:219
+msgid "Logout"
+msgstr "Déconnexion"
+
+#: /home/ed/Software/limscore/limscore/auth.py:276
+msgid "Switch Site"
+msgstr "Changer de Location"
+
+#: /home/ed/Software/limscore/limscore/auth.py:320
+msgid "Switch Project"
+msgstr "Changer de Projet"
+
+#: /home/ed/Software/limscore/limscore/auth.py:321
+#: /home/ed/Software/limscore/limscore/auth.py:334
+msgid "All Projects"
+msgstr "Tous les Projets"
+
+#: /home/ed/Software/limscore/limscore/auth.py:386
+msgid "Old password incorrect."
+msgstr "Ancien mot de passe invalide"
+
+#: /home/ed/Software/limscore/limscore/auth.py:406
+msgid "Invalid or expired link."
+msgstr "Lien expiré ou invalide"
+
+#: /home/ed/Software/limscore/limscore/auth.py:438
+msgid ""
+"Please follow {} to reset your {} password. This link can only be used "
+"once and will expire in 7 days."
+msgstr ""
+"Veuillez suivre le lien {} pour réinitialiser votre mot de passe {}. Ce "
+"lien ne peut être utiliséqu'une seule fois et expirera dans 7 jours."
+
+#: /home/ed/Software/limscore/limscore/auth.py:439
+msgid "{} Password Link"
+msgstr "Lien pour Mot de Passe {}"
+
+#: /home/ed/Software/limscore/limscore/auth.py:487
+msgid "Please scan QR code with the Google Authenticator App on your smartphone."
+msgstr ""
+"Veuillez scanner le code QR avec l'application Google Authenticator sur "
+"votre téléphone mobile."
+
+#: /home/ed/Software/limscore/limscore/aws.py:15
+msgid "Unable to send email. Please contact an administrator."
+msgstr ""
+"Impossible d'envoyer l'e-mail. Veuillez contacter un administrateur "
+"système."
+
+#: /home/ed/Software/limscore/limscore/aws.py:38
+msgid ""
+"Unable to send email at the present time. Please contact an administrator"
+" if this problem persists."
+msgstr ""
+"Impossible d'envoyer l'e-mail dans l'immédiat. Veuillez contacter un "
+"administrateur système si le problème persiste."
+
+#: /home/ed/Software/limscore/limscore/crud.py:120
+msgid "Hide Deleted"
+msgstr "Masquer les éléments supprimés"
+
+#: /home/ed/Software/limscore/limscore/crud.py:123
+msgid "Show Deleted"
+msgstr "Montrer les éléments supprimés"
+
+#: /home/ed/Software/limscore/limscore/crud.py:196
+msgid "Reorder {}"
+msgstr "Réorganiser {}"
+
+#: /home/ed/Software/limscore/limscore/forms.py:35
+msgid "Password"
+msgstr "Mot de Passe"
+
+#: /home/ed/Software/limscore/limscore/forms.py:36
+msgid "Authenticator Code"
+msgstr "Code d'Authentification"
+
+#: /home/ed/Software/limscore/limscore/forms.py:43
+msgid "Old Password"
+msgstr "Ancien Mot de Passe"
+
+#: /home/ed/Software/limscore/limscore/forms.py:44
+#: /home/ed/Software/limscore/limscore/forms.py:45
+msgid "New Password"
+msgstr "Nouveau Mot de Passe"
+
+#: /home/ed/Software/limscore/limscore/forms.py:49
+msgid "Passwords must match."
+msgstr "Les mots de passe doivent être identiques."
+
+#: /home/ed/Software/limscore/limscore/forms.py:56
+msgid "Surname"
+msgstr "Nom"
+
+#: /home/ed/Software/limscore/limscore/forms.py:57
+msgid "Forename"
+msgstr "Prénom"
+
+#: /home/ed/Software/limscore/limscore/forms.py:61
+msgid "Restrict Projects"
+msgstr "Limiter les Projets"
+
+#: /home/ed/Software/limscore/limscore/forms.py:61
+msgid "Only allow access to selected projects."
+msgstr "Limiter l'accès aux projets selectionnés."
+
+#: /home/ed/Software/limscore/limscore/logic.py:327
+msgid "Created"
+msgstr ""
+
+#: /home/ed/Software/limscore/limscore/logic.py:328
+msgid "Edited"
+msgstr "Modifié"
+
+#: /home/ed/Software/limscore/limscore/logic.py:329
+msgid "Added"
+msgstr "Ajouté"
+
+#: /home/ed/Software/limscore/limscore/logic.py:330
+msgid "Removed"
+msgstr ""
+
+#: /home/ed/Software/limscore/limscore/logic.py:331
+msgid "Deleted"
+msgstr "Supprimé"
+
+#: /home/ed/Software/limscore/limscore/logic.py:332
+msgid "Restored"
+msgstr "Restauré"
+
+#: /home/ed/Software/limscore/limscore/utils.py:77
+msgid "Help"
+msgstr "Aide"
+
+#~ msgid "Change language"
+#~ msgstr "Changer de language"
+

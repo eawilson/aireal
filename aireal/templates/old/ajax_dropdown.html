@@ -1,0 +1,9 @@
+{% for item in items %}
+    {% if item.text %}
+        <a class="dropdown-item" href="{{ item.href }}">{{ item.text }}</a>
+    {% elif item.divider %}
+        <div class="dropdown-divider"></div>
+    {% elif item.header %}
+        <h6 class="dropdown-header">{{ item.header }}</h6>
+    {% endif %}
+{% endfor %}

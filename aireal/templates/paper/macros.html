@@ -1,0 +1,130 @@
+
+
+
+{% macro render_field(field) %}
+                
+    {% if field.__iter__ %}
+        // ?fieldset
+        {% for subfield in field %}
+            {{ render_field(subfield) }}
+        {% endfor %}
+    
+    {% else %}
+        <div class="field">
+                {{ field.label(_class="label") }}
+            
+                {% if field.element == "select" %}
+                    {% if field.attr["multiple"] %}
+                        {% if field.errors %}
+                            <div class="control"><div class="select is-multiple is-danger">{{ field() }}</div></div>
+                            <p class="help is-danger">{{ field.errors }}</p>
+                        {% else %}
+                            <div class="control"><div class="select is-multiple">{{ field() }}</div></div>
+                        {% endif %}
+                    {% else %}
+                        {% if field.errors %}
+                            <div class="control"><div class="select is-danger">{{ field() }}</div></div>
+                            <p class="help is-danger">{{ field.errors }}</p>
+                        {% else %}
+                            <div class="control"><div class="select">{{ field() }}</div></div>
+                        {% endif %}
+                    {% endif %}
+                
+                {% elif field.element == "checkbox" %}
+                    {% if field.errors %}
+                        <label class="checkbox">{{ field(_class="is-danger") }}{{ field.choice }}</label>
+                        <p class="help is-danger">{{ field.errors }}</p>
+                    {% else %}
+                        <label class="checkbox">{{ field() }}{{ field.choice }}</label>
+                    {% endif %}
+                
+                {% elif field.element == "textarea" %}
+                    {% if field.errors %}
+                        <div class="control">{{ field(_class="textarea is-danger") }}</div>
+                        <p class="help is-danger">{{ field.errors }}</p>
+                    {% else %}
+                        <div class="control">{{ field(_class="textarea") }}</div>
+                    {% endif %}
+
+                {% else %}
+                    {% if field.errors %}
+                        <div class="control">{{ field(_class="input is-danger") }}</div>
+                        <p class="help is-danger">{{ field.errors }}</p>
+                    {% else %}
+                        <div class="control">{{ field(_class="input") }}</div>
+                    {% endif %}
+
+                {% endif %}
+        </div>
+    {% endif %}
+    
+{% endmacro %}
+
+
+
+
+
+{% macro render_hfield(field) %}
+                
+    {% if field.__iter__ %}
+        // ?fieldset
+        {% for subfield in field %}
+            {{ render_field(subfield) }}
+        {% endfor %}
+    
+    {% else %}
+        <div class="field is-horizontal">
+            <div class="field-label">
+                {{ field.label(_class="label") }}
+            </div>
+            
+            <div class="field-body">
+                {% if field.element == "select" %}
+                    {% if field.attr["multiple"] %}
+                        {% if field.errors %}
+                            <div class="control"><div class="select is-multiple is-danger">{{ field() }}</div></div>
+                            <p class="help is-danger">{{ field.errors }}</p>
+                        {% else %}
+                            <div class="control"><div class="select is-multiple">{{ field() }}</div></div>
+                        {% endif %}
+                    {% else %}
+                        {% if field.errors %}
+                            <div class="control"><div class="select is-danger">{{ field() }}</div></div>
+                            <p class="help is-danger">{{ field.errors }}</p>
+                        {% else %}
+                            <div class="control"><div class="select">{{ field() }}</div></div>
+                        {% endif %}
+                    {% endif %}
+                
+                {% elif field.element == "checkbox" %}
+                    {% if field.errors %}
+                        <label class="checkbox">{{ field(_class="is-danger") }}{{ field.choice }}</label>
+                        <p class="help is-danger">{{ field.errors }}</p>
+                    {% else %}
+                        <label class="checkbox">{{ field() }}{{ field.choice }}</label>
+                    {% endif %}
+                
+                {% elif field.element == "textarea" %}
+                    {% if field.errors %}
+                        <div class="control">{{ field(_class="textarea is-danger") }}</div>
+                        <p class="help is-danger">{{ field.errors }}</p>
+                    {% else %}
+                        <div class="control">{{ field(_class="textarea") }}</div>
+                    {% endif %}
+
+                {% else %}
+                    {% if field.errors %}
+                        <div class="control">{{ field(_class="input is-danger") }}</div>
+                        <p class="help is-danger">{{ field.errors }}</p>
+                    {% else %}
+                        <div class="control">{{ field(_class="input") }}</div>
+                    {% endif %}
+
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+    
+{% endmacro %}
+
+

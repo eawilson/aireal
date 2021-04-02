@@ -1,0 +1,127 @@
+
+
+
+{% macro render_field(field, cols=4) %}
+                
+        {% if field.__iter__ %}
+            <fieldset><div class="row">{{ field.legend(_class="col-sm-2") }}</div>
+            {% for subfield in field %}
+                {{ render_field(subfield) }}
+            {% endfor %}
+            </fieldset>
+        
+        {% else %}
+            <div class="form-group row">
+                {{ field.label(_class="col-sm-2") }}
+                {% if field.errors %}
+                    {% set fieldclass = "form-control is-invalid col-sm-" ~ cols %}
+                    {% set errorclass = "invalid-feedback col-sm-" ~ (9 - cols) %}
+                    {{ field(_class=fieldclass) }}
+                    <span class="{{ errorclass }}" >{{ field.errors }}</span>
+                {% else %}
+                    {% set fieldclass = "form-control col-sm-" ~ cols %}
+                    {{ field(_class=fieldclass) }}
+                {% endif %}
+            </div>
+            
+    {% endif %}
+{% endmacro %}
+
+
+{% macro render_table(table) %}
+    {% if table %}
+        <table class="table table-striped table-sm">
+            <thead>
+                <tr>
+                    {% for text, extra in table.headings %}
+                        <th {% for key, val in extra.data %}data-{{ key }}="{{ val }}" {% endfor %}>{{ text }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+
+            <tbody class="{{ table.class }}">
+                {% for row, extra in table.rows %}
+                    <tr class="{{ extra.class }}" {% for key, val in extra.data %}data-{{ key }}="{{ val }}" {% endfor %}>
+                        {% for text, extra in row %}
+                            <td>
+                                {% if extra %}
+                                    {% if extra.href %}
+                                        <a href="{{ extra.href }}" {% if extra.new_tab %}target="_blank"{% endif %}>{{ text }}</a>
+                                    {% elif extra.class %}
+                                        <span class="{{ extra.class }}">{{ text }}</span>
+                                    {% elif extra.formfield %}
+                                        {{ text(class="form-control") }}
+                                    {% elif extra.summary %}
+                                        <details><summary>{{ extra.summary }}</summary>{{ text }}</details>
+                                    {% endif %}
+                                {% else %}
+                                    {{ text }}
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+{% endmacro %}
+
+
+{% macro render_tabs(tabs) %}
+    {% if tabs %}
+        <div>
+            {% for row in tabs %}
+                <ul class="nav nav-tabs">
+                    {% for tab in row %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ tab.class }}" href="{{ tab.href }}">
+                                {{ tab.text }}
+                                {% if tab.badge %}<span class="badge badge-dark">{{ tab.badge }}</span>{% endif %}
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endmacro %}
+
+
+{% macro render_buttons(buttons) %}
+    {% if buttons %}
+        {% for text, extra in buttons %}
+            {% if extra.href %}
+                {% if text %}
+                    <a class="btn {% if extra.style %}btn-{{ extra.style }}{% else %}btn-primary{% endif %} {% if extra.class %}{{ extra.class }}{% endif %}" 
+                        href="{{ extra.href }}" role="button">{{ text }}</a>
+                {% elif extra.icon %}
+                    <a href="{{ extra.href }}"><i class="ui-icon ui-icon-{{ extra.icon }} {% if extra.class %}{{ extra.class }}{% endif %}"></i></a>
+                {% endif %}
+            {% elif extra.submit %}
+                <input type="submit" value="{{ text }}" formaction="{{ extra.submit }}"
+                    class="btn {% if extra.style %}btn-{{ extra.style }}{% else %}btn-primary{% endif %} {% if extra.class %}{{ extra.class }}{% endif %} single-use">
+            {% else %}
+                <span>{{ text }}</span>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+{% endmacro %}
+
+
+{% macro render_demographics(demographics) %}
+    {% if demographics %}
+        {{ render_table(demographics) }}
+        <br>
+    {% endif %}
+{% endmacro %}
+
+
+{% macro render_title(title) %}
+    {% if title %}
+        <h4>{{ title }}</h4>
+    {% endif %}
+{% endmacro %}
+
+
+
+
