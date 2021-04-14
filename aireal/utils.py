@@ -14,7 +14,7 @@ from flask.sessions import SecureCookieSessionInterface
 import flask
 from werkzeug import exceptions
 
-from sqlalchemy.exc import IntegrityError
+from psycopg2 import IntegrityError
 
 from .i18n import _
 from .forms import ActionForm
@@ -32,13 +32,64 @@ __all__ = ["Blueprint",
            "render_page",
            "navbar",
            "sign_cookie",
-           "unique_violation_or_reraise",
+           "unique_key",
            "iso8601_to_utc"]
 
 
 
 _navbars = {}
-valid_groups = set()
+valid_groups = []
+
+
+
+def dict_from_select(cur, sql, params={}):
+    cur.execute(sql, params)
+    row = cur.fetchone() or abort(exceptions.BadRequest)
+    return {col.name: val for col, val in zip(cur.description, row)}
+
+
+
+class Transaction(object):
+    def __init__(self):
+        self._conn = current_app.extensions["connction_pool"].getconn()
+        
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None:
+            self._conn.commit()
+        self.close()
+    
+    def close(self):
+        self._conn.rollback()
+        current_app.extensions["connction_pool"].putconn(self._conn)
+    
+    def __getattr__(self, attr):
+        return getattr(self._conn, attr)
+
+
+
+class Cursor(object):
+    def __init__(self):
+        self._conn = current_app.extensions["connction_pool"].getconn()
+        self._cur = self._conn.cursor()
+        
+    def __enter__(self):
+        return self._cur
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None:
+            self._conn.commit()
+        self.close()
+    
+    def close(self):
+        self._cur.close()
+        self._conn.rollback()
+        current_app.extensions["connction_pool"].putconn(self._conn)
+    
+    def __getattr__(self, attr):
+        return getattr(self._cur, attr)
 
 
 
@@ -50,6 +101,13 @@ def original_referrer():
     except KeyError:
         return referrer
 
+
+def original_referrer():
+    qs = parse_qs(urlparse(request.url)[4])
+    try:
+        return unquote_plus(qs["referrer"][0])
+    except KeyError:
+        return request.referrer
 
 
 def iso8601_to_utc(dt_string):
@@ -88,9 +146,6 @@ def render_page(name, active=None, **context):
 
         right = [{"text": session.get("project", ""),
                   "href": url_for("auth.project_menu"),
-                  "dropdown": True},
-                 {"text": session.get("site", ""),
-                  "href": url_for("auth.site_menu"),
                   "dropdown": True},
                  {"text": "",
                   "href": url_for("auth.logout_menu"),
@@ -178,7 +233,9 @@ def login_required(*authorised_groups):
         
      """
     def login_decorator(function):
-        valid_groups.update(authorised_groups)
+        for group in authorised_groups:
+            if group not in valid_groups:
+                valid_groups.append(group)
 
         @wraps(function)
         def wrapper(*args, **kwargs):
@@ -197,13 +254,6 @@ def login_required(*authorised_groups):
                 abort(exceptions.Conflict)
         return wrapper
     return login_decorator
-    
-
-
-class _ProxyEngine(object):
-    def __getattr__(self, name):
-        return getattr(current_app.extensions["engine"], name)
-engine = _ProxyEngine()
 
     
     
@@ -238,17 +288,7 @@ def sign_cookie(data):
 
 
 
-def unique_violation_or_reraise(e):
-    db_url = current_app.config["DB_URL"]
-    if db_url.startswith("postgresql"):
-        msg = repr(e.orig)
-        if msg.startswith("UniqueViolation"):
-            return msg.split("DETAIL:  Key (")[1].split(")")[0]
-        
-    elif db_url.startswith("sqlite://"):
-        # Need to confirm this works.
-        msg = e._message()
-        if " UNIQUE constraint failed: " in msg:
-            return msg.split(" UNIQUE constraint failed: ")[1].split(".")[1]
+def unique_key(e):
+    return str(e).split("\nDETAIL:  Key (")[1].split(")")[0]
 
-    raise e
+

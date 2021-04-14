@@ -112,8 +112,45 @@
 
 
 {% macro render_table(table) %}
+    <div>
+        <div>
+            {% if table.title %}<span>{{ table.title }}</span>{% endif %}
+            {% if table.get(showhide, True) %}
+                <a id="show-hide-button" class="button is-info is-light is-pulled-right is-small"></a>
+                <script>
+                    defer(function() {
+                        const showHide = document.getElementById("show-hide-button");
+                        const url = new URL(window.location.href);
+                        const hide = JSON.parse(sessionStorage.getItem("hide")) || {};
+                        
+                        function toggle() {
+                            hide[url.pth] = !hide[url.path];
+                            updateTable();
+                            sessionStorage.setItem("hide", JSON.stringify(hide));
+                            }
+                        
+                        function updateTable() {
+                            if (hide[url.pth]) {
+                                showHide.innerHTML = '{{ _("Show Deleted") }}';
+                                $("tr.deleted").hide();
+                                }
+                            else {
+                                showHide.innerHTML = '{{ _("Hide Deleted") }}';
+                                $("tr.deleted").show();
+                                }
+                            }
+                        
+                        updateTable();
+                        $("#show-hide-button").on("click", toggle);
+                        });
+                </script>
+            {% endif %}
+        </div>
+        {% if table.new %}<a class="icon" href="{{ table.new }}"><i class="fas fa-plus"></i></a>{% endif %}
+    </div>
+    
     <table class="table is-striped is-fullwidth">
-        <thead>
+        <thead class="is-sortable">
             <tr>
                 {% for col in table.head %}
                     <th>{{ col }}</th>
@@ -157,7 +194,7 @@
                                         {% for action in table.actions %}
                                             {{ action.name.replace(" ", "_").lower() }}: 
                                                 {name: "{{ action.name }}",
-                                                 callback:  function(key, opt) {
+                                                callback:  function(key, opt) {
                                                                 const url = new URL("{{ action.href }}", window.location.href);
                                                                 url.pathname = url.pathname.replace("0", $(this).attr("data-id"));
                                                                 {% if action.method == "POST" %}
@@ -170,15 +207,15 @@
                                                                     navigate(url.href);
                                                                 {% endif %}
                                                                 },
-                                                 {% if action.class %}
-                                                 visible: function(key, opt) {
+                                                {% if action.class %}
+                                                visible: function(key, opt) {
                                                             {% if action.class and action.class.startswith("!") %}
                                                                 return !$(this).hasClass("{{ action.class[1:] }}");
                                                             {% elif action.class %}
                                                                 return $(this).hasClass("{{ action.class }}");
                                                             {% endif %}
                                                             },
-                                                 {% endif %}
+                                                {% endif %}
                                                 },
                                         {% endfor %}
                                     }});

@@ -63,3 +63,8 @@ class ActionForm(Form):
 
 
 
+class NameForm(Form):
+    def definition(self):
+        self.name = TextInput(_("Name"))
+
+

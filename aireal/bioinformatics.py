@@ -1,11 +1,8 @@
-from sqlalchemy import select, join, or_, outerjoin, and_
-from sqlalchemy.exc import IntegrityError
-
 from flask import redirect, url_for, Blueprint, current_app
 from werkzeug import exceptions
 
 
-from .utils import engine, login_required, navbar, abort, tablerow, render_page, render_template
+from .utils import login_required, navbar, abort, tablerow, render_page, render_template
 from .i18n import _
 from .aws import list_objects, cloudfront_sign_url
 
@@ -68,8 +65,9 @@ def samples(run):
     actions = ({"name": _("View"), "href": url_for(".files", run_sample="0")},)
     table = {"head": (_("Sample"),),
              "body": body,
-             "actions": actions}
-    return render_page("table.html", table=table, title=run, buttons={"back": (_("Back"), url_for(".runs"))})
+             "actions": actions,
+             "title": run}
+    return render_page("table.html", table=table, buttons={"back": (_("Back"), url_for(".runs"))})
 
 
 
@@ -88,9 +86,10 @@ def files(run_sample):
     actions = ({"name": _("Download"), "href": url_for(".downloads", run_sample_filename="0")},)
     table = {"head": (_("File"), _("Size (MB)")),
              "body": body,
-             "actions": actions}
+             "actions": actions,
+             "title": run_sample.replace("/", " - ")}
     run = run_sample.split("/")[0]
-    return render_page("table.html", table=table, title=run_sample.replace("/", " - "), buttons={"back": (_("Back"), url_for(".samples", run=run))})
+    return render_page("table.html", table=table, buttons={"back": (_("Back"), url_for(".samples", run=run))})
 
 
 

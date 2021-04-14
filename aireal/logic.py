@@ -1,13 +1,9 @@
 import pdb
-from datetime import timedelta
 
 from flask import session
 
-from sqlalchemy import select, join, outerjoin, or_, and_
-from sqlalchemy.exc import IntegrityError
-
-from .models import users, users_groups, logs, metadata
 from.utils import utcnow
+
 
 
 def update_table(table, old_data, new_data, primary_keys, conn):
@@ -259,75 +255,84 @@ def upsert(table, unique_data, other_data, conn):
 
 
 
+loggable = {"users": ["email", "forename", "surname"],
+            "projects": ["name"]
+           }
+
+joins = {"users": {"groups": ("users_groups", "user_id", "group_id"),
+                   "projects": ("users_projects", "user_id", "project_id")}
+        }
 
 
 
-
-
-
-
-
-
-
-
-
-def crud(conn, table, new, old={}, **choices):
-    changed = {k: v for k, v in new.items() if not isinstance(v, list) and v != old.get(k, None)}
+def crud(cur, table, new, old={}, **choices):
+    changed = {}
+    for k, v in new.items():
+        if not isinstance(v, list) and v != old.get(k, None):
+            changed[k] = v
+    
     if "id" in old:
+        action = "Edited"
         row_id = old["id"]
         if changed:
-            sql = table.update(). \
-                    where(table.c.id == row_id). \
-                    values(**changed)
-            conn.execute(sql)
-            action = "Edited"
+            assignments = ", ".join(f"{k} = %({k})s" for k in changed.keys())
+            sql = f"UPDATE {table} SET {assignments} WHERE id = {row_id};"
+            cur.execute(sql, changed)
     else:
-        sql = table.insert().values(**changed)
-        row_id = conn.execute(sql).inserted_primary_key[0]
+        keys = sorted(changed.keys())
+        columns = ", ".join(keys)
+        values = ", ".join(f"%({k})s" for k in keys)
+        sql = f"INSERT INTO {table} ({columns}) VALUES ({values}) RETURNING id;"
+        cur.execute(sql, changed)
+        row_id = cur.fetchone()[0]
         action = "Created"
 
     deleted = changed.pop("deleted", None)
-    loggable = {}
+    details = {}
     for k, v in changed.items():
-        if getattr(table.c, k).info.get("log", False):
-            for option in choices.get(k, ()):
-                if option[0] == v:
-                    if k.endswith("_id"):
-                        k = k[:-3]
-                    loggable[k] = option[1]
-                    break
-            if k not in loggable:
-                loggable[k] = v
-    if loggable:
-        crudlog(table.name, row_id, action, loggable, conn)
+        if k in loggable.get(table, ()):
+            if isinstance(v, dict):
+                old_attr = old[k]
+                for attr_k, attr_v in v.items():
+                    if not attr_v.statswith("_") and attr_v != old_attr.get(attr_k, None):
+                        details[attr_k] = attr_v
+            else:
+                for option in choices.get(k, ()):
+                    if option[0] == v:
+                        if k.endswith("_id"):
+                            k = k[:-3]
+                        v = option[1]
+                        break
+                details[k] = v
+    if action == "Created" or details:
+        crudlog(cur, table=table, row_id=row_id, action=action, details=details)
     
     for k, v in new.items():
         if isinstance(v, list):
             new_ids = set(v)
             old_ids = set(old.get(k, ()))
-            to_ins = new_ids - old_ids
-            to_del = old_ids - new_ids
-            if to_ins or to_del:
-                m2mtable, primary, secondary = _linking_table(table, metadata.tables[k])
-                names = dict(choice[:2] for choice in choices[k])
-                
-                if to_ins:
-                    data = [{primary.name: row_id, secondary.name: sec_id}
-                            for sec_id in to_ins]
-                    conn.execute(m2mtable.insert(), data)
-                    items = ", ".join(names[sec_id] for sec_id in to_ins)
-                    crudlog(table.name, row_id, "Added", {k: items}, conn)
-                
-                if to_del:
-                    sql = m2mtable.delete().where(and_(primary == row_id,
-                                                    secondary.in_(to_del)))
-                    conn.execute(sql)
-                    items = ", ".join(names[sec_id] for sec_id in to_del)
-                    crudlog(table.name, row_id, "Removed", {k: items}, conn)
+            to_ins = sorted(new_ids - old_ids)
+            to_del = sorted(old_ids - new_ids)
+            link_table, col1, col2 = joins[table][k]
+            names = dict(choices[k])
+            
+            if to_ins:
+                sql = f"INSERT INTO {link_table} ({col1}, {col2}) VALUES (%({col1})s, %({col2})s);"
+                data = [{col1: row_id, col2: sec_id} for sec_id in to_ins]
+                cur.executemany(sql, data)
+                items = ", ".join(names[sec_id] for sec_id in to_ins)
+                crudlog(cur, table=table, row_id=row_id, action="Added", details={k: items})
+            
+            if to_del:
+                sql = f"DELETE FROM {link_table} WHERE {col1} = %({col1})s AND {col2} = %({col2})s;"
+                data = [{col1: row_id, col2: sec_id} for sec_id in to_del]
+                cur.executemany(sql, data)
+                items = ", ".join(names[sec_id] for sec_id in to_del)
+                crudlog(cur, table=table, row_id=row_id, action="Removed", details={k: items})
         
     if deleted is not None:
         action = "Deleted" if deleted else "Restored"
-        crudlog(table.name, row_id, action, conn=conn)
+        crudlog(cur, table=table, row_id=row_id, action=action)
     return row_id
     _("Created")
     _("Edited")
@@ -339,35 +344,15 @@ def crud(conn, table, new, old={}, **choices):
 
 
 
-def crudlog(tablename, row_id, action, details={}, conn=None):
-    details = "\t".join(f"{k}={v}" for k, v in sorted(details.items()))
-    conn.execute(logs.insert().values(tablename=str(tablename),
-                                             row_id=row_id,
-                                             action=action,
-                                             details=details,
-                                             user_id=session.get("id", None),
-                                             datetime=utcnow()))
-
-
-
-def _linking_table(table1, table2):
-    found = 0
-    for table in metadata.sorted_tables:
-        if table == table1 or table == table2:
-            found += 1
-        # Is len == 2 really the best way of identifying a linking table?
-        elif found == 2 and len(table.c) == 2:
-            joined = [tuple(col.foreign_keys)[0].column.table
-                      for col in table.c 
-                      if col.foreign_keys]
-            
-            if table1 in joined and table2 in joined:
-                for col in table.c:
-                    if col.foreign_keys:
-                        thistable = tuple(col.foreign_keys)[0].column.table
-                        if thistable == table1:
-                            primary = col
-                        elif thistable == table2:
-                            secondary = col
-                return (table, primary, secondary)
+def crudlog(cur, **data):
+    details = data["details"]
+    data["details"] = "\t".join(f"{k}={v}" for k, v in sorted(details.items()))
+    data["user_id"] = session.get("id", None)
+    data["datetime"] = utcnow()
     
+    sql = "INSERT INTO logs (tablename, row_id, action, details, user_id, datetime) VALUES" \
+          " (%(table)s, %(row_id)s, %(action)s, %(details)s, %(user_id)s, %(datetime)s)"
+    cur.execute(sql, data)
+
+
+

@@ -15,7 +15,7 @@ from sqlalchemy import (Table,
 from sqlalchemy.schema import Identity
 from sqlalchemy.dialects.postgresql import JSONB
 
-from ..models import metadata, users, sites, users_projects, projects
+from ..models import metadata, users, locations, users_projects, projects, locations, locationtypes
 
 
 
@@ -29,6 +29,6 @@ slides = Table("slides", metadata,
     Column("created_datetime", DateTime(timezone=True), nullable=False),
     Column("attr", JSONB, default={}, nullable=False),
     Column("user_id", Integer, ForeignKey("users.id"), nullable=False),
-    Column("site_id", Integer, ForeignKey("sites.id"), nullable=False, info={"log": True}),
+    Column("location_id", Integer, ForeignKey("locations.id"), nullable=False, info={"log": True}),
     Column("status", String, nullable=False, info={"log": True}),
     Column("deleted", Boolean(name="bool"), nullable=False, default=False))

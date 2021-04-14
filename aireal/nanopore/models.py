@@ -22,8 +22,6 @@ from aireal.models import (metadata,
                              users,
                              groups,
                              users_groups,
-                             sites,
-                             users_sites,
                              users_projects,
                              configurations,
                              projects)

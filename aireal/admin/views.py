@@ -17,9 +17,10 @@ def admin_navbar():
 @login_required("Admin")
 def editmenu():
     body = [tablerow(_("Projects"), id="projects"),
-            tablerow(_("Sites"), id="sites")]
+            tablerow(_("Locations"), id="locations"),
+            tablerow(_("Location Catalog"), id="locationmodels")]
     
-    actions = ({"name": _("View"), "href": "/0?dir=1"},) # Not ideal
+    actions = ({"name": _("View"), "href": "/0"},) # Not ideal
     table = {"head": (_("Tables"),), "body": sorted(body), "actions": actions}
     return render_page("table.html", table=table, buttons=())
 

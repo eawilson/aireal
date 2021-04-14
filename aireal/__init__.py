@@ -6,7 +6,10 @@ import pdb
 from flask import Flask
 from flask.json.tag import JSONTag
 
-from .models import create_engine
+from psycopg2.extras import Json
+from psycopg2.pool import ThreadedConnectionPool
+from psycopg2.extensions import register_adapter
+
 from .i18n import i18n_init
 from .aws import ec2_metadata
 
@@ -43,19 +46,8 @@ def create_app(instance_path="."):
     if "REGION" in app.config:
         os.environ["AWS_DEFAULT_REGION"] = app.config["AWS_REGION"]
     
-    db_url = config["DB_URL"]
-    if db_url.startswith("sqlite:///") and db_url[10] != "/":
-        cwd = os.getcwd()
-        os.chdir(instance_path)
-        db_path = os.path.abspath(db_url[10:])
-        db_url = f"sqlite:///{db_path}"
-        app.config["DB_URL"] = db_url
-        os.chdir(cwd)
-    
-    #with app.app_context():
-        #logger.initialise()
-    
-    app.extensions["engine"] = create_engine(db_url, isolation_level="SERIALIZABLE")
+    register_adapter(dict, Json)
+    app.extensions["connction_pool"] = ThreadedConnectionPool(1, 10, dsn=config["DB_URI"])
     
     class TagDate(JSONTag):
         __slots__ = ('serializer',)

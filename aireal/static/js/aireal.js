@@ -97,6 +97,17 @@ defer (function() {
     
     
     $(".modal-close").on("click", closeModals);
+    
+    
+    $("input").on("invalid", function() {
+        $(this).addClass("is-danger");
+        });
+    
+    
+    $("input").on("input", function() {
+        $(this).removeClass("is-danger");
+        });
+    
     });
 
 

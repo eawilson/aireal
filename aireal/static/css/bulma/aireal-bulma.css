@@ -1,6 +1,7 @@
 #logo {
     color: #8cc63f;
     }
+
 td, th, a, span, label {
     -webkit-user-select: none;
     -moz-user-select: -moz-none;
@@ -8,11 +9,7 @@ td, th, a, span, label {
     user-select: none;
     }
 
-tr[data-href] {
-    cursor: pointer;
-    }
-
-table.is-sortable thead, tbody.is-clickable {
+thead.is-sortable, tbody.is-clickable {
     cursor: pointer;
     }
 
@@ -39,7 +36,7 @@ input[type=checkbox] {
     transform: scale(1.4);
     }
 
-    
+
 /* https://stephanwagner.me/only-css-loading-spinner */
 @keyframes spinner {
   to {transform: rotate(360deg);}

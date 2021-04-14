@@ -58,10 +58,6 @@
         </nav>
         
         <section class="main-section">
-            <div>
-                <span id="title">{{ title }}</span>
-                {% if buttons and buttons.info %}<a class="button is-info is-light is-pulled-right is-small" href="{{ buttons.info[1] }}">{{ buttons.info[0] }}</a>{% endif %}
-            </div>
             
             {% if tabs %}
                 <div class="tabs is-boxed">
@@ -76,8 +72,6 @@
                     </ul>
                 </div>
             {% endif %}
-            
-            {% if buttons and buttons.new %}<a class="icon" href="{{ buttons.new[1] }}"><i class="fas fa-plus"></i></a>{% endif %}
             
             {% block content %}
             {% endblock %}

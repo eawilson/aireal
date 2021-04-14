@@ -242,6 +242,8 @@ class Input(object):
     
     def __init__(self, label="", required="Data required", **kwargs):
         self.attr = HTMLAttr(**kwargs)
+        if required:
+            self.attr["required"] = True
         self._label = label
         if required is True:
             # Hard habit to break
@@ -565,13 +567,12 @@ class MultiCheckboxInput(MultiSelectInput):
             
             
     def _single_checkbox(self, choice):
-        disabled = len(choice) > 2 and choice[2] == "disabled"
         name = self.attr["name"]
         field = Input(name=name,
                       id="{}-{}".format(self.attr["id"], choice[0]),
                       type="checkbox",
                       checked=self.is_selected(choice[0]),
-                      disabled=disabled)
+                      disabled=getattr(choice, "disabled", False))
         field.details = choice[1]
         field.data = choice[0]
         return field

@@ -58,20 +58,6 @@ users_groups = Table("users_groups", metadata,
 
 
 
-sites = Table("sites", metadata,
-    Column("id", Integer, Identity(), primary_key=True, nullable=False),
-    Column("name", String, unique=True, nullable=False, info={"log": True}),
-    Column("deleted", Boolean(name="bool"), default=False, index=True, nullable=False))
-
-
-
-users_sites = Table("users_sites", metadata,
-    Column("user_id", Integer, ForeignKey("users.id"), nullable=False),
-    Column("site_id", Integer, ForeignKey("sites.id"), nullable=False),
-    UniqueConstraint("user_id", "site_id"))
-
-
-
 projects = Table("projects", metadata,
     Column("id", Integer, Identity(), primary_key=True),
     Column("name", String, unique=True, nullable=False),
@@ -86,14 +72,59 @@ users_projects = Table("users_projects", metadata,
 
 
 
+users_locations = Table("users_locations", metadata,
+    Column("user_id", Integer, ForeignKey("users.id"), nullable=False),
+    Column("location_id", Integer, ForeignKey("locations.id"), nullable=False),
+    UniqueConstraint("user_id", "location_id"))
+
+
+
+locations = Table("locations", metadata,
+    Column("id", Integer, Identity(start=1), primary_key=True), # Set sequence start to enable self referential first entry
+    Column("name", String, nullable=False), # Unique within each site
+    Column("barcode", String, nullable=True), # Unique within each site
+    Column("locationmodel_id", Integer, ForeignKey("locationmodels.id"), nullable=False),
+    Column("parent_id", Integer, ForeignKey("locations.id"), nullable=False),
+    Column("site_id", Integer, ForeignKey("locations.id"), nullable=False), # Only used for unique constraint purposes
+    Column("attr", JSONB, default={}, nullable=False),
+    Column("deleted", Boolean(name="bool"), default=False, nullable=False),
+    UniqueConstraint("name", "site_id"),
+    UniqueConstraint("barcode", "site_id"))
+
+
+
+locationmodels = Table("locationmodels", metadata,
+    Column("id", Integer, Identity(), primary_key=True),
+    Column("name", String, unique=True, nullable=False),
+    Column("locationtype", String, ForeignKey("locationtypes.name"), nullable=False),
+    Column("movable", Boolean(name="bool"), nullable=False), # Not normalised (duplicate data in locationtypes.attr) but consistent with other type attrinbutes
+    Column("attr", JSONB, default={}, nullable=False),
+    Column("deleted", Boolean(name="bool"), default=False, nullable=False))
+
+
+
+locationtypes = Table("locationtypes", metadata,
+    Column("name", String, primary_key=True),
+    Column("attr", JSONB, default={}, nullable=False),
+    Column("deleted", Boolean(name="bool"), default=False, nullable=False))
+
+
+
+locationtypes_locationtypes = Table("locationtypes_locationtypes", metadata,
+    Column("parent", Integer, ForeignKey("locationtypes.name"), nullable=False),
+    Column("child", Integer, ForeignKey("locationtypes.name"), nullable=False),
+    UniqueConstraint("parent", "child"))
+
+
+
 logs = Table("logs", metadata,
     Column("id", Integer, Identity(), primary_key=True, nullable=False),
     Column("tablename", String, nullable=False, index=True),
     Column("row_id", Integer, nullable=False, index=True),
     Column("action", String, nullable=False),
     Column("details", String, nullable=False),
-    Column("user_id", Integer, ForeignKey("users.id"), nullable=True),
-    Column("ip_address", String, nullable=True),
+    Column("user_id", Integer, ForeignKey("users.id"), nullable=True, index=True),
+    Column("ip_address", String, default="", nullable=False),
     Column("datetime", DateTime(timezone=True), nullable=False))
 
 
@@ -134,18 +165,49 @@ collections = Table("collections", metadata,
 samples = Table("samples", metadata,
     Column("id", Integer, Identity(), primary_key=True),
     Column("collection_id", Integer, ForeignKey("collections.id"), nullable=False),
-    Column("parent_id", Integer, ForeignKey("subjects.id"), nullable=True),
+    Column("parent_id", Integer, ForeignKey("samples.id"), nullable=True),
     Column("project_id", Integer, ForeignKey("projects.id"), nullable=False),
     Column("material_id", Integer, ForeignKey("materials.id"), nullable=False),
     Column("creation_datetime", DateTime(timezone=True), nullable=False),
+    Column("position", String, nullable=False),
+    Column("location", Integer, ForeignKey("locations.id"), nullable=True),
     Column("attr", JSONB, default={}, nullable=False),
     Column("deleted", Boolean(name="bool"), nullable=False, default=False))
 
 
 
-samples = Table("materials", metadata,
+materials = Table("materials", metadata,
     Column("id", Integer, Identity(), primary_key=True),
     Column("name", String, nullable=False))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -156,7 +218,7 @@ analyses = Table("analyses", metadata,
     Column("sequencing_id", Integer, ForeignKey("sequencings.id"),
                             nullable=True),
     Column("application", String, nullable=True),
-    Column("version", String, nullable=True),
+    Column("version", String, nullable=False),
     Column("command_line", String, nullable=False),
     Column("log", String, nullable=False),######################################
     Column("status", String, nullable=False),########################### ??????

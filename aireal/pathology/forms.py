@@ -8,6 +8,8 @@ from ..i18n import _
 
 class DirectoryUploadForm(Form):
     def definition(self):
+        self.project_id = SelectInput(_("Project"))
+        self.pathology_site_id = SelectInput(_("Site"))
         self.files = DirectoryInput(_("Select Slide Folder to Upload"), required=False)
 
 
@@ -24,12 +26,13 @@ class CompletionForm(Form):
     def definition(self):
         self.timestamp = TextInput()
         self.directory = TextInput()
+        self.project_id = SelectInput(_("Site"))
+        self.pathology_site_id = SelectInput(_("Site"))
 
 
 
 class SlideForm(Form):
     def definition(self):
-        self.name = TextInput("Name")
-        self.site_id = SelectInput("Site")
-        self.project_id = SelectInput("Project")
+        self.name = TextInput(_("Name"))
+        self.pathology_site_id = SelectInput(_("Site"))
 
