@@ -119,15 +119,15 @@ def iso8601_to_utc(dt_string):
 
 
 
-def render_template(name, style=None, **kwargs):
+def render_template(template_name, style=None, **kwargs):
     """ Adds correct prefix to template supplied to flask.render_template.
         Enables swapping of css styles on the fly.
     """
     if style is None:
         style = current_app.config.get("STYLE", None)
     if style is not None:
-        name = f"{style}/{name}"
-    return flask.render_template(name, **kwargs)
+        template_name = f"{style}/{template_name}"
+    return flask.render_template(template_name, **kwargs)
 
 
 

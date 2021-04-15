@@ -345,7 +345,7 @@ def crud(cur, table, new, old={}, **choices):
 
 
 def crudlog(cur, **data):
-    details = data["details"]
+    details = data.get("details", {})
     data["details"] = "\t".join(f"{k}={v}" for k, v in sorted(details.items()))
     data["user_id"] = session.get("id", None)
     data["datetime"] = utcnow()
