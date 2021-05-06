@@ -1,40 +1,38 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import select, join, or_, outerjoin, and_
-from flask import Blueprint, url_for
+from flask import url_for
 
-from ..utils import navbar, login_required, tablerow, render_page, utcnow, Transaction
+from ..utils import Blueprint, navbar, tablerow, render_page, Transaction
 from ..i18n import _
 
-from ..models import collections, samples, subjects, users, projects, materials, logs
 
 
 
-app = Blueprint("reception", __name__)
+app = Blueprint("reception", __name__, "Reception")
 
 
 @navbar("Reception")
 def reception_navbar():
-    return [{"text": _("Collections"), "href":  url_for("reception.list_collections")}]
+    return [{"text": _("Collections"), "href":  url_for("reception.collection_list")}]
 
 
 
 @app.route("/collections")
-@login_required("Reception")
-def list_collections():
+def collection_list():
     now = utcnow()
     today = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
-    filters = [collections.c.received_datetime >= today]
+    filters = [collection.c.received_datetime >= today]
     
-    sql = select([collections.c.id, projects.c.name.label("project"), subjects.c.name.label("subject"), materials.c.name.label("material"), collections.c.received_datetime, users.c.name.label("user"), collections.c.deleted]). \
-            select_from(join(collections, samples, samples.c.collection_id == collections.c.id). \
-                        join(subjects, collections.c.subject_id == subjects.c.id). \
-                        join(projects, subjects.c.project_id == projects.c.id). \
-                        join(materials, materials.c.id == samples.c.material_id). \
-                        join(logs, and_(logs.c.row_id == collections.c.id, logs.c.tablename == collections.name)). \
+    sql = select([collection.c.id, project.c.name.label("project"), subjects.c.name.label("subject"), material.c.name.label("material"), collection.c.received_datetime, users.c.name.label("user"), collection.c.deleted]). \
+            select_from(join(collection, samples, samples.c.collection_id == collection.c.id). \
+                        join(subjects, collection.c.subject_id == subjects.c.id). \
+                        join(project, subjects.c.project_id == project.c.id). \
+                        join(material, material.c.id == samples.c.material_id). \
+                        join(logs, and_(logs.c.row_id == collection.c.id, logs.c.tablename == collection.name)). \
                         join(users, users.c.id == logs.c.user_id)). \
             where(and_(*filters)). \
-            order_by(collections.c.received_datetime.desc())
+            order_by(collection.c.received_datetime.desc())
     
     head=(_("Subject"), _("Project"), _("Samples"), _("Date Received"), _("Received By"))
     body = []
@@ -61,21 +59,17 @@ def list_collections():
                        buttons=())
 
 @app.route("/collections/<int:collection_id>")
-@login_required("Reception")
 def view_collection(collection_id):
     pass
 
 @app.route("/collections/<int:collection_id>/edit")
-@login_required("Reception")
 def edit_collection(collection_id):
     pass
 
 @app.route("/collections/<int:collection_id>/edit")
-@login_required("Reception")
 def collection_log(collection_id):
     pass
 
 @app.route("/collections/new")
-@login_required("Reception")
 def new_collection():
     pass

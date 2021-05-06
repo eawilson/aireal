@@ -6,14 +6,31 @@ import importlib
 
 from flask import current_app, session, request
 from babel.messages.pofile import read_po
-    
+
+
+
+class AnnotatedStr(str):
+    pass
+
+
 
 def _(text):
     try:
         return current_app.extensions["locales"][session["locale"]][text]
     except KeyError:
         return text
+    
+    
 
+def __(text):
+    try:
+        translated = AnnotatedStr(current_app.extensions["locales"][session["locale"]][text])
+    except KeyError:
+        translated = AnnotatedStr(text)
+    translated.unlocalised = text
+    return translated
+    
+    
 
 def i18n_init(app):
     package = importlib.import_module(app.import_name)

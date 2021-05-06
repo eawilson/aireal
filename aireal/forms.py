@@ -1,4 +1,4 @@
-from .i18n import _
+from .i18n import __ as _
 from .lib.forms import (Form,
                         Input,
                         TextInput,
@@ -6,10 +6,10 @@ from .lib.forms import (Form,
                         HiddenInput,
                         PasswordInput,
                         NameInput,
-                        TextNumberInput,
                         LowerCaseInput,
                         EmailInput,
                         IntegerInput,
+                        FloatInput,
                         DecimalInput,
                         NHSNumberInput,
                         DateInput,
@@ -19,7 +19,9 @@ from .lib.forms import (Form,
                         MultiSelectInput,
                         MultiCheckboxInput,
                         FileInput,
-                        DirectoryInput)
+                        DirectoryInput,
+                        Placeholder,
+                        Placeholder2)
 
 
 

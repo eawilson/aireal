@@ -11,53 +11,58 @@
             {{ render_field(subfield) }}
         {% endfor %}
         {{ render_errors(field) }}
-        
+ 
     {% else %}
-        <div class="field">
-                {{ field.label(_class="label") }}
-            
-                {% if field.element == "select" %}
-                    {% if field.attr["multiple"] %}
+        <div class="columns">
+            <div class="column is-three-quaters">
+                <div class="field">
+                    {{ field.label(_class="label") }}
+                
+                    {% if field.element == "select" %}
+                        {% if field.attr["multiple"] %}
+                            {% if field.errors %}
+                                <div class="control"><div class="select is-multiple is-danger">{{ field() }}</div></div>
+                                {{ render_errors(field) }}
+                            {% else %}
+                                <div class="control"><div class="select is-multiple">{{ field() }}</div></div>
+                            {% endif %}
+                        {% else %}
+                            {% if field.errors %}
+                                <div class="control"><div class="select is-danger">{{ field() }}</div></div>
+                                {{ render_errors(field) }}
+                            {% else %}
+                                <div class="control"><div class="select">{{ field() }}</div></div>
+                            {% endif %}
+                        {% endif %}
+                    
+                    {% elif field.element == "checkbox" %}
                         {% if field.errors %}
-                            <div class="control"><div class="select is-multiple is-danger">{{ field() }}</div></div>
+                            <label class="checkbox">{{ field(_class="is-danger") }} {{ field.details }}</label>
                             {{ render_errors(field) }}
                         {% else %}
-                            <div class="control"><div class="select is-multiple">{{ field() }}</div></div>
+                            <label class="checkbox">{{ field() }} {{ field.details }}</label>
                         {% endif %}
-                    {% else %}
+                    
+                    {% elif field.element == "textarea" %}
                         {% if field.errors %}
-                            <div class="control"><div class="select is-danger">{{ field() }}</div></div>
+                            <div class="control">{{ field(_class="textarea is-danger") }}</div>
                             {{ render_errors(field) }}
                         {% else %}
-                            <div class="control"><div class="select">{{ field() }}</div></div>
+                            <div class="control">{{ field(_class="textarea") }}</div>
                         {% endif %}
-                    {% endif %}
-                
-                {% elif field.element == "checkbox" %}
-                    {% if field.errors %}
-                        <label class="checkbox">{{ field(_class="is-danger") }} {{ field.details }}</label>
-                        {{ render_errors(field) }}
-                    {% else %}
-                        <label class="checkbox">{{ field() }} {{ field.details }}</label>
-                    {% endif %}
-                
-                {% elif field.element == "textarea" %}
-                    {% if field.errors %}
-                        <div class="control">{{ field(_class="textarea is-danger") }}</div>
-                        {{ render_errors(field) }}
-                    {% else %}
-                        <div class="control">{{ field(_class="textarea") }}</div>
-                    {% endif %}
 
-                {% else %}
-                    {% if field.errors %}
-                        <div class="control">{{ field(_class="input is-danger") }}</div>
                     {% else %}
-                        <div class="control">{{ field(_class="input") }}</div>
-                    {% endif %}
-                    {{ render_errors(field) }}
+                        {% if field.errors %}
+                            <div class="control">{{ field(_class="input is-danger") }}</div>
+                        {% else %}
+                            <div class="control">{{ field(_class="input") }}</div>
+                        {% endif %}
+                        {{ render_errors(field) }}
 
-                {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        <div class="column is-one-quater"></div>
         </div>
     {% endif %}
 {% endmacro %}
@@ -114,7 +119,18 @@
 {% macro render_table(table) %}
     <div>
         <div>
+            {% if table.breadcrumbs %}
+                <nav class="breadcrumb">
+                    <ul>
+                        {% for name, url, active in table.breadcrumbs %}
+                            <li {% if active %}class="is-active"{% endif %}><a href="{{ url }}">{{ name }}</a></li> 
+                        {% endfor %}
+                    </ul>
+                </nav>
+            {% endif %}
+        
             {% if table.title %}<span>{{ table.title }}</span>{% endif %}
+            
             {% if table.get(showhide, True) %}
                 <a id="show-hide-button" class="button is-info is-light is-pulled-right is-small"></a>
                 <script>
@@ -158,7 +174,7 @@
             </tr>
         </thead>
 
-        <tbody>
+        <tbody {% if table.actions %}data-menu-id="table-menu{{ table.id }}"{% endif %}>
             {% for row, attr in table.body %}
                 <tr {% if attr.deleted %}class="deleted"{% endif %} {% if attr.id %} data-id="{{ attr.id }}"{% endif %}>
                     {% for col in row %}
@@ -166,79 +182,30 @@
                     {% endfor %}
                 </tr>
             {% endfor %}
-        
-            {% if table.actions %}            
-                <script>
-                    (function() {
-                        const tbody = document.currentScript.parentElement;                        
-                        defer(function(e) {
-                            $(tbody.parentElement).tablesort();
-                            $(tbody).one("click", "tr", function() {
-                                    const url = new URL("{{ table.actions[0].href }}", window.location.href);
-                                    url.pathname = url.pathname.replace("0", $(this).attr("data-id"));
-                                    navigate(url.href);
-                                    return false;
-                                    })
-                                .addClass("is-clickable")
-                                .contextMenu({
-                                    selector: "tr",
-                                    events: {
-                                        show: function(opt){
-                                                    $(this).addClass('is-selected');
-                                                    },
-                                        hide: function(opt){
-                                                    $(this).removeClass('is-selected');
-                                                    }
-                                        },
-                                    items: {
-                                        {% for action in table.actions %}
-                                            {{ action.name.replace(" ", "_").lower() }}: 
-                                                {name: "{{ action.name }}",
-                                                callback:  function(key, opt) {
-                                                                const url = new URL("{{ action.href }}", window.location.href);
-                                                                url.pathname = url.pathname.replace("0", $(this).attr("data-id"));
-                                                                {% if action.method == "POST" %}
-                                                                    const action = document.getElementById("action");
-                                                                    action.value = "{{ action.name }}";
-                                                                    const form = document.getElementById("action-form");
-                                                                    form.action = url.href;
-                                                                    form.submit();
-                                                                {% else %}
-                                                                    navigate(url.href);
-                                                                {% endif %}
-                                                                },
-                                                {% if action.class %}
-                                                visible: function(key, opt) {
-                                                            {% if action.class and action.class.startswith("!") %}
-                                                                return !$(this).hasClass("{{ action.class[1:] }}");
-                                                            {% elif action.class %}
-                                                                return $(this).hasClass("{{ action.class }}");
-                                                            {% endif %}
-                                                            },
-                                                {% endif %}
-                                                },
-                                        {% endfor %}
-                                    }});
-                            });
-                        })();
-                </script>
-            {% endif %}
         </tbody>
     </table>
-{% endmacro %}
+    
+    {% if table.actions %}
+        <div class="dropdown" id="table-menu{{ table.id }}">
+            <div class="dropdown-menu">
+                <div class="dropdown-content">
+                    {% for action in table.actions %}
+                        <a class="dropdown-item" data-href="{{ action.href }}" data-method="{{ action.method }}" data-visible-if="{{ action.class }}">{{ action.name }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
 
+{% endmacro %}
+        
 
 
 {% macro render_form(form, buttons) %}
     {{ form }}
-        <div class="columns">
-            <div class="column is-three-quaters">
-            {% for field in form.values() %}
-                {{ render_field(field) }}
-            {% endfor %}
-            </div>
-            <div class="column is-one-quater"></div>
-        </div>
+        {% for field in form.values() %}
+            {{ render_field(field) }}
+        {% endfor %}
         {{ render_buttons(buttons) }}
     </form>
     <p class="help is-danger">{{ form.error }}</p>

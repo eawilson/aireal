@@ -265,15 +265,7 @@ class Placeholder(Element):
     placeholder = True
     
     def __call__(self, **kwargs):
-        return Markup('<div {}>'.format(self.attr.combined(kwargs)))
-
-
-
-class Placeholder2(Element):
-    placeholder = True
-    
-    def __call__(self, **kwargs):
-        return Markup('</div>')
+        return Markup('<div {}></div>'.format(self.attr.combined(kwargs)))
 
 
 

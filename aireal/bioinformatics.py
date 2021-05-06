@@ -1,14 +1,14 @@
-from flask import redirect, url_for, Blueprint, current_app
+from flask import redirect, url_for, current_app
 from werkzeug import exceptions
 
 
-from .utils import login_required, navbar, abort, tablerow, render_page, render_template
+from .utils import Blueprint, navbar, abort, tablerow, render_page, render_template
 from .i18n import _
 from .aws import list_objects, cloudfront_sign_url
 
 
 
-app = Blueprint("bioinformatics", __name__)
+app = Blueprint("bioinformatics", __name__, "Bioinformatics")
 
 
 @navbar("Bioinformatics")
@@ -22,7 +22,6 @@ def admin_navbar():
 
 
 @app.route("/importmenu")
-@login_required("Bioinformatics")
 def import_menu():
     menu = [{"text": _("BaseSpace"), "href": url_for("basespace.accounts")},
             {"text": _("Nanopre"), "href": url_for("nanopore.runs")}]
@@ -31,7 +30,6 @@ def import_menu():
 
 
 @app.route("/runs")
-@login_required("Bioinformatics")
 def runs():
     prefix = "projects/EBVL/analyses4/"
     runs = set()
@@ -51,7 +49,6 @@ def runs():
 
 
 @app.route("/samples/<string:run>")
-@login_required("Bioinformatics")
 def samples(run):
     prefix = f"projects/EBVL/analyses4/{run}/"
     samples = set()
@@ -72,7 +69,6 @@ def samples(run):
 
 
 @app.route("/files/<path:run_sample>")
-@login_required("Bioinformatics")
 def files(run_sample):
     prefix = f"projects/EBVL/analyses4/{run_sample}/"
     
@@ -94,7 +90,6 @@ def files(run_sample):
 
 
 @app.route("/downloads/<path:run_sample_filename>")
-@login_required("Bioinformatics")
 def downloads(run_sample_filename):
     config = current_app.config
     url = f'https://{config.get("BIOINFORMATICS_DOWNLOAD_DOMAIN")}/{run_sample_filename}'

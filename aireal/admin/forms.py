@@ -1,4 +1,4 @@
-from ..i18n import _
+from ..i18n import __ as _
 from ..forms import (Form,
                      Input,
                      TextInput,
@@ -6,6 +6,7 @@ from ..forms import (Form,
                      MultiCheckboxInput,
                      SelectInput,
                      IntegerInput,
+                     FloatInput,
                      BooleanInput,
                      ActionForm,
                      NameForm)
@@ -17,9 +18,9 @@ class UserForm(Form):
         self.surname = TextInput(_("Surname"))
         self.forename = TextInput(_("Forename"))        
         self.email = EmailInput(_("Email"))
-        self.groups = MultiCheckboxInput(_("Groups"), required=False)
+        self.role = MultiCheckboxInput(_("Roles"), coerce=str, required=False)
         self.restricted = BooleanInput(_("Restrict Projects"), details=_("Only allow access to selected projects."), required=False)        
-        self.projects = MultiCheckboxInput(_("Projects"), required=False)
+        self.project = MultiCheckboxInput(_("Projects"), required=False)
 
 
 
@@ -43,17 +44,27 @@ class ProjectForm(Form):
 
 class LocationModelForm(Form):
     def definition(self):
-        self.locationtype = SelectInput(_("Type"), coerce=str)
         self.name = TextInput(_("Name"))
+        self.locationtype = SelectInput(_("Type"), coerce=str, _class="get-dynamic-fields", **{"data-target": "placeholder"})
+        
+        self.temperature = IntegerInput(_("Temperature (°C)"))
+
+        self.shelves = IntegerInput(_("Shelves"))
+        self.shelf_width = IntegerInput(_("Shelf Width (cm)"))
+        self.shelf_depth = IntegerInput(_("Shelf Depth (cm)"))
+
+        self.trays = IntegerInput(_("Trays"))
+        self.boxes = IntegerInput(_("Boxes per Tray"))
+ 
+        
         self.rows = IntegerInput(_("Rows"))
         self.columns = IntegerInput(_("Columns"))
+        
         self.width = IntegerInput(_("Width (cm)"))
-        self.length = IntegerInput(_("Length (cm)"))
-        self.shelf_model_id = SelectInput(_("Shelf Model"))
-        self.shelf_number = IntegerInput(_("Number of Shelves"))
-        self.tray_model_id = SelectInput(_("Tray Model"))
-        self.tray_number = IntegerInput(_("Number of Trays"))
-        self.temperature = IntegerInput(_("Temperature (°C)"))
+        self.depth = IntegerInput(_("Depth (cm)"))
+        
+        self.material = SelectInput(_("Material"))
+        self.volume = FloatInput(_("Volume (ml)"))
 
 
 
@@ -64,3 +75,16 @@ class NameBarcodeForm(Form):
 
 
 
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

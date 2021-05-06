@@ -1,0 +1,5 @@
+{% import "bulma/macros.html" as macros %}
+
+{% for field in form.fields %}
+    {{ macros.render_field(field) }}
+{% endfor %}

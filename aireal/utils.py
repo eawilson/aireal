@@ -14,20 +14,20 @@ from flask.sessions import SecureCookieSessionInterface
 import flask
 from werkzeug import exceptions
 
+from itsdangerous.exc import BadSignature
+from itsdangerous import URLSafeTimedSerializer
+
 from psycopg2 import IntegrityError
 
 from .i18n import _
 from .forms import ActionForm
 
 __all__ = ["Blueprint",
+           "validate_token",
            "utcnow",
            "local_subnet",
-           "login_required",
-           "engine",
            "abort",
            "tablerow",
-           "initial_surname",
-           "surname_forename",
            "render_template",
            "render_page",
            "navbar",
@@ -38,7 +38,176 @@ __all__ = ["Blueprint",
 
 
 _navbars = {}
-valid_groups = []
+    #import inspect
+    #for frame in inspect.stack():
+        #print(frame[0].f_locals.get("allowed", "."))
+
+
+
+def absolute_url_for(*args, **kwargs):
+    return request.host_url + url_for(*args, **kwargs)
+
+
+
+class _ReturnEndpoint(object):
+    # Match call signiture used for route registration to extract
+    # endpoints from the lambda functions that they are stored in.
+    @staticmethod
+    def add_url_rule(rule, endpoint, view_func, **options):
+        return endpoint
+
+
+
+class Blueprint(flask.Blueprint):
+    valid_roles = ()
+    
+    def __init__(self, name, import_name, *roles, **kwargs):
+        """ Wrapper around Bluprint __init__ method with the 
+            additional positional argument *roles. This lists
+            all the roles that are allowed to access the routes
+            of this Blueprint. If no roles are provided then all
+            logged in users can access the route.
+        """
+        for role in roles:
+            if role not in self.valid_roles:
+                type(self).valid_roles += (role,)
+        
+        self.roles = roles
+        return super().__init__(name, import_name, **kwargs)
+        
+        
+        
+    def route(self, rule, *roles, **options):
+        """ Wrapper arounf Blueprint route with the additional positional
+            argument *roles. This overides *roles in the __init__ method
+            and lists all the roles allowed to access this route. Returns
+            the wrapped view function that performs the following action:
+            
+            1) Check that the user is logged in.
+            
+            2) Check that the user has assumed the correct role to access
+               this view. WARNING If a view is decorated with multiple routes
+               then the roles from the innermost decorator will be used for
+               all routes.
+            
+            3) Catch IntegrityErrors caused by simultaneous attemps to
+               write the same rows in the databse.
+        """
+        
+        def decorator(function):
+            """ Check if the function has already been registered and therefore
+                already wrapped. If so then just return it unmodified. WARNING
+                This depends on private internals of the Blueprint which could
+                potentialy change in future versions.
+            """
+            
+            endpoint = options.pop("endpoint", None) or function.__name__
+            already_wrapped = False
+            for registration_function in self.deferred_functions:
+                try:
+                    if registration_function(_ReturnEndpoint) == endpoint:
+                        already_wrapped = True
+                        break
+                except Exception:
+                    pass
+            
+            if already_wrapped:
+                wrapper = function
+            
+            else:
+                for role in roles:
+                    if role not in self.valid_roles:
+                        type(self).valid_roles += (role,)
+                
+                allowed = roles or self.roles
+                
+                @wraps(function)
+                def wrapper(*args, **kwargs):
+                    if "id" not in session:
+                        return redirect(url_for("auth.login"))
+                    
+                    if allowed and session["role"] not in allowed:
+                        if request.method == "POST":
+                            abort(exceptions.Forbidden)
+                        else:
+                            return redirect(url_for("auth.root"))
+                    
+                    try:
+                        return function(*args, **kwargs)
+                    except IntegrityError:
+                        abort(exceptions.Conflict)
+        
+            self.add_url_rule(rule, endpoint, wrapper, **options)
+            return wrapper
+        return decorator
+    
+    
+    def signed_route(self, rule, max_age=0, **options):
+        """ Wrapper arounf Blueprint route with the additional keyword
+            argument max_age. This is the maximum allowed age of the signature
+            in seconds. Access to the route is alowed if the user is logged in
+            ("id" in session) or has a valid signiture that is not too old. If 
+            this fails then either:
+            
+            Redirect to root url if accessed by an interactive user as determined
+            by the presence of a User-agent header.
+            
+            or
+            
+            Return a json response detailing the error if accessed programmatically
+            as determined by the absence of a User-agent header.
+            
+        """
+
+        def decorator(function):
+            """ Check if the function has already been registered and therefore
+                already wrapped. If so then just return it unmodified. WARNING
+                This depends on private internals of the Blueprint which could
+                potentialy change in future versions.
+            """
+            
+            endpoint = options.pop("endpoint", None) or function.__name__
+            already_wrapped = False
+            for registration_function in self.deferred_functions:
+                try:
+                    if registration_function(_ReturnEndpoint) == endpoint:
+                        already_wrapped = True
+                        break
+                except Exception:
+                    pass
+            
+            if already_wrapped:
+                wrapper = function
+            
+            else:
+                @wraps(function)
+                def wrapper(*args, **kwargs):
+                    token = {**request.view_args, **request.args}.get("token")
+                    if (token and validate_token(token, max_age)) or "id" in session:
+                        return function(*args, **kwargs)
+                    else:
+                        if "User-agent" in request.headers:
+                            return redirect(url_for("auth.root"))
+                        else:
+                            return {}, 401
+            
+            self.add_url_rule(rule, endpoint, wrapper, **options)
+            return wrapper
+        return decorator
+    
+    
+    def insecure_route(self, *args, **kwargs):
+        return super().route(*args, **kwargs)
+
+
+
+def validate_token(token, max_age):
+    secret = current_app.config["SECRET_KEY"]
+    s = URLSafeTimedSerializer(secret, salt="set_password")
+    try:
+        return s.loads(token, max_age=max_age)
+    except BadSignature:
+        return {}
 
 
 
@@ -142,7 +311,7 @@ def render_page(name, active=None, **context):
     if "id" not in session:
         navbar = {"app": application}
     else:
-        group = session.get("group", "")
+        role = session.get("role", "")
 
         right = [{"text": session.get("project", ""),
                   "href": url_for("auth.project_menu"),
@@ -151,28 +320,19 @@ def render_page(name, active=None, **context):
                   "href": url_for("auth.logout_menu"),
                   "dropdown": True}]
         navbar = {"app": application,
-                  "name": group,
+                  "name": _(role),
                   "active": active,
-                  "left": _navbars.get(group, lambda:())(),
+                  "left": _navbars.get(role, lambda:())(),
                   "right": right}
     return render_template(name, navbar=navbar, action_form=ActionForm(id="action-form"), **context)
 
 
 
-def utcnow():
-    """ Returns current datetime with timezone set to UTC. Assumes that the
-        server is running on UTC time which is the only sensible configuration
-        anyway.
-    """
-    return datetime.now(tz=timezone.utc)
-
-
-
-def navbar(group):
+def navbar(role):
     """ Decorator to register a new navbar menu.
     """
     def decorator(function):
-        _navbars[group] = function
+        _navbars[role] = function
         return function
     return decorator
 
@@ -189,74 +349,6 @@ def local_subnet(function):
 
 
 
-def signature_required():
-    pass
-
-
-
-def login_required(*authorised_groups):
-    """Decorator to protect every view function (except login, set_password,
-        etc that are called before user is logged in). Group names are in the
-        format Section.Role. If no groups are provided then this endpoint can
-        be viewed and written to by anyone although the actual records they
-        can access can still be limited by filtering database queries on their
-        current Section and/or Role within the view. If a Role is provided
-        then the endpoint can be viewed by anyone but only written to by a
-        user currently holding that Role. If a Section is provided then that
-        endpoint can only be viewed by users currently holding that Section.
-        Also provides navigation support by storing the url for use by the
-        url_back function.
-        
-        All view functions MUST be protected with this decorator.
-        
-        *** WARNING Writable endpoints that have no groups specified MUST 
-        protect against writes by users with the view function itself by 
-        database filtering of choices supplied to forms as even though 
-        these views will never be directly accessable from the navbar the
-        url could be hand entered by a malicious user. ***
-
-    Args:
-        groups (list of str): Groups allowed to make a request to this 
-            endpoint.
-        ajax_or_new_tab (bool): If True then this request is outside of
-            normal navigation and should not be added to the navigation 
-            stack.
-        
-    Returns:
-        None
-        
-    Raises:
-        Forbidden if users group does not match the required permissions for
-        this endpoint.
-        Conflict if a database IntegrityError occurs during datbase access.
-        All other exceptions are passed through unmodified.
-        
-     """
-    def login_decorator(function):
-        for group in authorised_groups:
-            if group not in valid_groups:
-                valid_groups.append(group)
-
-        @wraps(function)
-        def wrapper(*args, **kwargs):
-            if "id" not in session:
-                return redirect(url_for("auth.login"))
-            
-            if authorised_groups and session["group"] not in authorised_groups:
-                if request.method == "POST":
-                    abort(exceptions.Forbidden)
-                else:
-                    return redirect(url_for("auth.root"))
-            
-            try:
-                return function(*args, **kwargs)
-            except IntegrityError:
-                abort(exceptions.Conflict)
-        return wrapper
-    return login_decorator
-
-    
-    
 def abort(exc):
     raise exc
 
@@ -264,20 +356,6 @@ def abort(exc):
 
 def tablerow(*args, **kwargs):
     return (args, kwargs)
-    
-    
-
-def initial_surname(forename, surname):
-    if forename:
-        return "{}.{}".format(forename[0], surname)
-    return surname or ""
-    
-
-
-def surname_forename(surname, forename):
-    if forename:
-        return "{}, {}".format(surname, forename)
-    return surname or ""
 
 
 

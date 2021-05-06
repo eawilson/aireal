@@ -12,10 +12,9 @@ function navigate(href) {
         }
 
 
-function navigateHandler() {
-    const href = $(this).attr("href") || $(this).data("href");
-    navigate(href);
-    return false;
+function navigateHandler(e) {
+    e.preventDefault();
+    navigate(e.currentTarget.href);
     }
 
 
@@ -67,8 +66,11 @@ defer (function() {
             }
         }
     
-
-    $("a[href]").on("click", navigateHandler);
+    
+    const anchors = document.querySelectorAll('a[href]');
+    for (var i = 0; i < anchors.length; ++i) {
+        anchors[i].addEventListener('click', navigateHandler);
+        }
     
     // Only allow a form to be submitted once. Should have sufficient logic
     // to prevent dara corruption if multiple submissions but this ensures
@@ -106,6 +108,33 @@ defer (function() {
     
     $("input").on("input", function() {
         $(this).removeClass("is-danger");
+        });
+    
+    $(".get-dynamic-fields").on("change", function() {
+        function swapFields(data, textStatus, jqXHR) {
+            var root = this;
+            while (root.parentElement.nodeName != 'FORM') {
+                root = root.parentElement;
+                if (root == null) {
+                    return;
+                    }
+                }
+            
+            var elem = root.nextSibling;
+            while (elem !== null && (elem.nodeName == '#text' || elem.nodeName == 'DIV')) {
+                var unwanted = elem;
+                elem = elem.nextSibling;
+                unwanted.remove();
+                }
+            
+            root.insertAdjacentHTML('afterend', data);
+            }
+        
+        var url = new URL(window.location.href);
+        url.searchParams.set(this.name, this.value);
+        $.ajax({url: url.href,
+                context: this,
+                success: swapFields});
         });
     
     });

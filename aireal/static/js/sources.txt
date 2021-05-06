@@ -1,0 +1,56 @@
+Updated 2021-05-02
+
+igv.2.7.6.min.js
+Description - Embeddable interactive genome visualization component
+URL - https://github.com/igvteam/igv.js
+License - MIT
+Dependencies - None
+
+
+jquery-3.6.0.min.js
+URL - https://github.com/jquery/jquery
+License - MIT
+Description - JavaScript library
+Dependencies - None
+
+
+m3u8-parser.4.3.0.min.js
+URL - https://github.com/videojs/m3u8-parser
+License - Apache 2.0
+Description - 
+Dependencies - 
+
+
+openseadragon.2.4.2.min.js
+URL - 
+License - 
+Description - 
+Dependencies - 
+
+
+openseadragon-annotations.1.0.5.js
+URL - 
+License - 
+Description - 
+Dependencies - 
+
+
+Sortable-1.10.0.min.js
+URL - 
+License - 
+Description - 
+Dependencies - 
+
+
+spark-md5.3.0.0.min.js
+URL - 
+License - 
+Description - 
+Dependencies - 
+
+
+video.min.7.10.2.js
+URL - 
+License - 
+Description - 
+Dependencies - 

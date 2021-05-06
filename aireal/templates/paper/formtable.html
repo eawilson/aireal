@@ -1,0 +1,46 @@
+{% extends "bulma/base.html" %} 
+
+{% import "bulma/macros.html" as macros %}
+
+{% block content %}
+
+    {{ form }}
+        <table class="table is-striped is-fullwidth is-sortable">
+            <thead>
+                <tr>
+                    <th class="no-sort"><input id="master-checkbox" type="checkbox" class="checkbox"></th>
+                    {% for col in table.head %}
+                        <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for row, attr in table.body %}
+                    <tr {% if attr.deleted %}class="deleted"{% endif %} {% if attr.href %} data-href="{{ attr.href }}"{% endif %}>
+                        <td>{{ macros.render_field(attr.checkbox) }}</td>
+                        {% for col in row %}
+                            <td{% if col.value %} data-sort-value="{{ col.value }}"{% endif %}>{{ col }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <p class="help is-danger">{{ form.error }}</p>
+        
+        {{ macros.render_buttons(buttons) }}
+        {% if modal %}{{ macros.render_modal(modal) }}{% endif %}
+    </form>
+
+    <script>
+        defer(function() {
+            $('#master-checkbox').click (function () {
+                $('input[type=checkbox]').not("[disabled]").prop('checked', this.checked);
+                });
+
+            {% if modal %}{{ macros.modal_script() }}{% endif %}
+            });
+    </script>
+
+{% endblock %}

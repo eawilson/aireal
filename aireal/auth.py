@@ -4,6 +4,7 @@ import hashlib
 import struct
 import hmac
 import os
+from datetime import datetime, timezone
 import pdb
 from io import BytesIO
 from urllib.parse import quote
@@ -19,7 +20,6 @@ from flask import (session,
                    url_for,
                    request,
                    abort,
-                   Blueprint,
                    current_app)
 
 from werkzeug.exceptions import (Conflict,
@@ -29,23 +29,20 @@ from werkzeug.exceptions import (Conflict,
 
 from passlib.hash import bcrypt_sha256
 from itsdangerous import URLSafeTimedSerializer
-from itsdangerous.exc import BadSignature
 
 from .forms import (LoginForm,
                    ChangePasswordForm,
                    TwoFactorForm)
 from .utils import (Transaction,
+                    Cursor,
+                    Blueprint,
                     render_template,
                     render_page,
-                    utcnow,
-                    surname_forename,
-                    login_required,
-                    valid_groups,
                     abort,
                     _navbars,
-                    original_referrer)
+                    original_referrer,
+                    validate_token)
 from .aws import sendmail
-from .logic import crud
 from .i18n import _, locale_from_headers
 
 
@@ -66,40 +63,40 @@ app = Blueprint("auth", __name__)
 
 
 def update_last_session(cur, **kwargs):
-    user_id = session["id"]
+    users_id = session["id"]
     sql = """SELECT last_session
              FROM users
-             WHERE id = %(user_id)s;"""
-    row = cur.execute(sql, {"user_id": user_id})
+             WHERE id = %(users_id)s;"""
+    row = cur.execute(sql, {"users_id": users_id})
     last_session = (row or ({},))[0]
     new_session = {**last_session, **kwargs}
     if new_session != last_session:
         sql = """UPDATE users
                  SET last_session = %(last_session)s
-                 WHERE id = %(user_id)s;"""
-        cur.execute(sql, {"user_id": user_id, "last_session": new_session})
+                 WHERE id = %(users_id)s;"""
+        cur.execute(sql, {"users_id": users_id, "last_session": new_session})
 
 
 
-def token_required(function):
-    @wraps(function)
-    def wrapper(*args, **kwargs):
-        token = {**request.view_args, **request.args}.get("token")
-        if token and validate_token(token):
-            return function(*args, **kwargs)
-        else:
-            return login_required()(function)(*args, **kwargs)
-    return wrapper
+#def token_required(function):
+    #@wraps(function)
+    #def wrapper(*args, **kwargs):
+        #token = {**request.view_args, **request.args}.get("token")
+        #if (token and validate_token(token)) or "id" in session:
+            #return function(*args, **kwargs)
+        #else:
+            #return redirect(url_for("auth.root"))
+    #return wrapper
 
 
 
-def validate_token(token):
-    secret = current_app.config["SECRET_KEY"]
-    s = URLSafeTimedSerializer(secret, salt="set_password")
-    try:
-        return s.loads(token, max_age=60*60*24*7)
-    except BadSignature:
-        return {}
+#def validate_token(token):
+    #secret = current_app.config["SECRET_KEY"]
+    #s = URLSafeTimedSerializer(secret, salt="set_password")
+    #try:
+        #return s.loads(token, max_age=60*60*24*7)
+    #except BadSignature:
+        #return {}
 
 
 
@@ -128,11 +125,11 @@ def hotp(secret, counter, token_length=6):
 
 
 
-@app.route("/")
+@app.insecure_route("/")
 def root():
     if "id" in session:
         try:
-            return redirect(_navbars[session["group"]]()[0]["href"])
+            return redirect(_navbars[session["role"]]()[0]["href"])
         except (KeyError, IndexError):
             return render_page("base.html")
     else:
@@ -140,7 +137,7 @@ def root():
 
 
 
-@app.route("/login", methods=["GET", "POST"])
+@app.insecure_route("/login", methods=["GET", "POST"])
 def login():
     feedback = ""
     form = LoginForm(request.form)
@@ -151,14 +148,14 @@ def login():
                          FROM users
                          WHERE email = %(email)s AND deleted = FALSE;"""
                 cur.execute(sql, {"email": form.email.data})
-                user_id, password, totp_secret, last_session = cur.fetchone() or (None, "", "", {})
+                users_id, password, totp_secret, last_session = cur.fetchone() or (None, "", "", {})
                 
         session.clear()
         one_time = hotp(totp_secret, int(time.time()) // 30)
         password_matches = verify_password(form.password.data, password)
         
         if password_matches and form.authenticator.data == one_time:
-            session["id"] = user_id
+            session["id"] = users_id
             session["csrf"] = token_urlsafe(64)
             try:
                 session["timezone"] = pytz.timezone(form.timezone.data).zone
@@ -167,16 +164,15 @@ def login():
             
             with Transaction() as trans:
                 with trans.cursor() as cur:
-                    sql = """SELECT id
-                                FROM groups
-                                INNER JOIN users_groups ON users_groups.group_id = groups.id
-                                WHERE users_groups.user_id = %(user_id)s
-                                ORDER BY groups.name = %(name)s DESC;"""
-                    cur.execute(sql, {"user_id": user_id, "name": last_session.get("group", "")})
-                    group_id = (cur.fetchone() or (None,))[0]
+                    sql = """SELECT name
+                             FROM role_users
+                             WHERE users_id = %(users_id)s AND name IN %(valid_roles)s
+                             ORDER BY name = %(role)s DESC;"""
+                    cur.execute(sql, {"users_id": users_id, "role": last_session.get("role", ""), "valid_roles": Blueprint.valid_roles})
+                    role = (cur.fetchone() or (None,))[0]
                         
-            if group_id is not None:
-                setrole(group_id)
+            if role is not None:
+                setrole(role)
             if "project_id" in last_session:
                 setproject(last_session["project_id"])
             setlocale(last_session.get("locale", locale_from_headers()))
@@ -191,7 +187,7 @@ def login():
 
 
 
-@app.route("/reset", methods=["GET", "POST"])
+@app.insecure_route("/reset", methods=["GET", "POST"])
 def reset():
     feedback = ""
     form = LoginForm(request.form)
@@ -218,21 +214,19 @@ def reset():
 
 
 @app.route("/logoutmenu")
-@login_required()
 def logout_menu():
     menu = []
     
     rows = []
     with Transaction() as trans:
         with trans.cursor() as cur:
-            sql = """SELECT groups.id, groups.name
-                     FROM groups
-                     INNER JOIN users_groups ON groups.id = users_groups.group_id
-                     WHERE users_groups.user_id = %(user_id)s AND groups.name != %(name)s AND groups.name IN %(valid_groups)s
-                     ORDER BY groups.name;"""
-            cur.execute(sql, {"user_id": session["id"], "name": session.get("group", ""), "valid_groups": tuple(valid_groups)})
-            for group_id, name in cur:
-                rows.append({"text": name, "href": url_for(".setrole", group_id=group_id)})
+            sql = """SELECT name
+                     FROM role_users
+                     WHERE users_id = %(users_id)s AND name != %(role)s AND name IN %(valid_roles)s
+                     ORDER BY role_users.name;"""
+            cur.execute(sql, {"users_id": session["id"], "role": session.get("role", ""), "valid_roles": Blueprint.valid_roles})
+            for role, in cur:
+                rows.append({"text": _(role), "href": url_for(".setrole", role=role)})
     if rows:
         menu += [{"text": _("Change Role")}] + rows + [{"divider": True}]
     
@@ -260,28 +254,25 @@ def logout_menu():
 
 
 
-@app.route("/setrole/<int:group_id>")
-@login_required()
-def setrole(group_id):
+@app.route("/setrole/<string:role>")
+def setrole(role):
     with Transaction() as trans:
         with trans.cursor() as cur:
-            sql = """SELECT groups.name
-                     FROM groups
-                     INNER JOIN users_groups ON groups.id = users_groups.group_id
-                     WHERE users_groups.user_id = %(user_id)s AND groups.id = %(group_id)s AND groups.name IN %(valid_groups)s;"""
-            cur.execute(sql, {"user_id": session["id"], "group_id": group_id, "valid_groups": tuple(valid_groups)})
-            group = (cur.fetchone() or (None,))[0]
+            sql = """SELECT name
+                     FROM role_users
+                     WHERE users_id = %(users_id)s AND name = %(role)s AND name IN %(valid_roles)s;"""
+            cur.execute(sql, {"users_id": session["id"], "role": role, "valid_roles": Blueprint.valid_roles})
+            role = (cur.fetchone() or (None,))[0]
             
-            if group is not None:
-                session["group"] = group
-                update_last_session(cur, group=group)
+            if role is not None:
+                session["role"] = role
+                update_last_session(cur, role=role)
                 return redirect(request.referrer)
     return redirect(url_for(".logout"))
 
 
 
 @app.route("/logout")
-@login_required()
 def logout():
     session.clear()
     return redirect(url_for(".login"))
@@ -289,17 +280,16 @@ def logout():
 
 
 @app.route("/projectmenu")
-@login_required()
 def project_menu():
     menu = []
     with Transaction() as trans:
         with trans.cursor() as cur:
-            sql = """SELECT projects.id, projects.name
-                     FROM projects
-                     INNER JOIN users_projects ON projects.id = users_projects.project_id
-                     WHERE users_projects.user_id = %(user_id)s AND projects.id != %(project_id)s AND projects.deleted = FALSE
-                     ORDER BY projects.name;"""
-            cur.execute(sql, {"user_id": session["id"], "project_id": session.get("project_id", 0)})
+            sql = """SELECT project.id, project.name
+                     FROM project
+                     INNER JOIN project_users ON project.id = project_users.project_id
+                     WHERE project_users.users_id = %(users_id)s AND project.id != %(project_id)s AND project.deleted = FALSE
+                     ORDER BY project.name;"""
+            cur.execute(sql, {"users_id": session["id"], "project_id": session.get("project_id", 0)})
             rows = [{"text": name, "href": url_for(".setproject", project_id=project_id)} for project_id, name in cur]
 
     if rows:
@@ -311,19 +301,17 @@ def project_menu():
 
 @app.route("/setproject/all", defaults={"project_id": None})
 @app.route("/setproject/<int:project_id>")
-@login_required()
 def setproject(project_id):
     if project_id is None:
         project = _("All Projects")
     else:
-        with Transaction() as trans:
-            with trans.cursor() as cur:
-                sql = """SELECT projects.name
-                         FROM projects
-                         INNER JOIN users_projects ON projects.id = users_projects.project_id
-                         WHERE users_projects.user_id = %(user_id)s AND projects.id = %(project_id)s AND projects.deleted = FALSE;"""
-                cur.execute(sql, {"user_id": session["id"], "project_id": project_id})
-                project = (cur.fetchone() or (None,))[0]
+        with Cursor() as cur:
+            sql = """SELECT project.name
+                        FROM project
+                        INNER JOIN project_users ON project.id = project_users.project_id
+                        WHERE project_users.users_id = %(users_id)s AND project.id = %(project_id)s AND project.deleted = FALSE;"""
+            cur.execute(sql, {"users_id": session["id"], "project_id": project_id})
+            project = (cur.fetchone() or (None,))[0]
 
     if project:
         session["project_id"] = project_id
@@ -334,7 +322,6 @@ def setproject(project_id):
 
 
 @app.route("/setlocale/<string:locale>")
-@login_required()
 def setlocale(locale):
     if locale not in current_app.extensions["locales"]:
         locale = "en_GB"
@@ -348,25 +335,25 @@ def setlocale(locale):
 
 
 @app.route("/changepassword", methods=["GET", "POST"])
-@login_required()
 def change_password():
     referrer = request.args.get("referrer2")
         
     form = ChangePasswordForm(request.form)
     if request.method == "POST" and form.validate():
-        with Transaction() as trans:
-            with trans.cursor() as cur:
-                sql = """SELECT password
-                         FROM  users
-                         WHERE id = %(user_id)s;"""
-                cur.execute(sql, {"user_id": session["id"]})
-                old_password = (cur.fetchone() or ("",))[0]
-                if bcrypt_sha256.verify(form.old_password.data, old_password):
-                    new = {"password": bcrypt_sha256.hash(form.password1.data),
-                           "reset_datetime": None}
-                    old = {"id": session["id"]}
-                    crud(cur, "users", new, old)
-                    return redirect(referrer)
+        with Cursor() as cur:
+            sql = """SELECT password
+                     FROM  users
+                     WHERE id = %(users_id)s;"""
+            cur.execute(sql, {"users_id": session["id"]})
+            old_password = (cur.fetchone() or ("",))[0]
+            if bcrypt_sha256.verify(form.old_password.data, old_password):
+                sql = """UPDATE users
+                         SET password = %(password)s, reset_datetime = %(reset_datetime)s
+                         WHERE id = %(id)s;"""
+                cur.execute(sql, {"password": bcrypt_sha256.hash(form.password1.data),
+                                  "reset_datetime": None,
+                                  "id": session["id"]})
+                return redirect(referrer)
         form.old_password.errors = _("Old password incorrect.")
     
     submit = ("Save", url_for(".change_password", referrer2=referrer))
@@ -375,33 +362,38 @@ def change_password():
 
 
 
-@app.route("/setpassword/<string:token>", methods=["GET", "POST"])
-@token_required
+@app.signed_route("/setpassword/<string:token>", methods=["GET", "POST"], max_age=60*60*24*7)
 def set_password(token):
     payload = validate_token(token)
-    with Transaction() as trans:
-        with trans.cursor() as cur:
-            sql = """SELECT id, totp_secret
-                     FROM users
-                     WHERE email = %(email)s AND reset_datetime = %(reset_datetime)s;"""
-            cur.execute(sql, {"email": payload.get("email", ""), "reset_datetime": payload.get("reset_datetime", utcnow())})
-            row = cur.fetchone()
-            if row is None:
-                return redirect(url_for(".login"))
-            
-            old = {col.name: val for col, val in zip(cur.description, row)}
-            form = ChangePasswordForm(request.form)
-            del form["old_password"]
-            if request.method == "POST" and form.validate():
-                new = {"password": bcrypt_sha256.hash(form.password1.data)}
-                if old["totp_secret"]:
-                    new["reset_datetime"] = None
-                    destination = url_for(".login")
-                else:
-                    destination = url_for(".twofactor", token=token)
-                crud(cur, "users", new, old)
-                session.clear()
-                return redirect(destination)
+    reset_datetime = payload.get("reset_datetime", datetime.now(tz=timezone.utc))
+    email = payload.get("email", "")
+    
+    with Cursor() as cur:
+        sql = """SELECT id, totp_secret
+                 FROM users
+                 WHERE email = %(email)s AND reset_datetime = %(reset_datetime)s;"""
+        cur.execute(sql, {"email": email, "reset_datetime": reset_datetime})
+        users_id, totp_secret = cur.fetchone() or (None, None)
+        if users_id is None:
+            return redirect(url_for(".login"))
+        
+        form = ChangePasswordForm(request.form)
+        del form["old_password"]
+        if request.method == "POST" and form.validate():
+            if totp_secret:
+                reset_datetime = None
+                destination = url_for(".login")
+            else:
+                destination = url_for(".twofactor", token=token)
+                
+            sql = """UPDATE users
+                     SET password = %(password)s, reset_datetime = %(reset_datetime)s
+                     WHERE id = %(users_id)s;"""
+            cur.execute(sql, {"password": bcrypt_sha256.hash(form.password1.data),
+                              "reset_datetime": reset_datetime,
+                              "users_id": users_id})
+            session.clear()
+            return redirect(destination)
                 
     submit = ("Save",  url_for(".set_password", token=token))
     return render_page("login.html", form=form, submit=submit)
@@ -409,7 +401,7 @@ def set_password(token):
 
 
 def send_setpassword_email(cur, email):
-    reset_datetime = str(utcnow())
+    reset_datetime = str(datetime.now(tz=timezone.utc))
     sql = """UPDATE users
              SET reset_datetime = %(reset_datetime)s
              WHERE users.email = %(email)s;"""
@@ -430,8 +422,7 @@ def send_setpassword_email(cur, email):
             print(link)
 
 
-@app.route("/qrcode/<string:email>/<string:secret>")
-@token_required
+@app.signed_route("/qrcode/<string:email>/<string:secret>", max_age=60*60*24*7)
 def qrcode(email, secret):
     
     service = quote(current_app.config.get("NAME", "<APP>"))
@@ -452,19 +443,18 @@ def qrcode(email, secret):
 
 
 
-@app.route("/twofactor", methods=["GET", "POST"])
-@token_required
+@app.signed_route("/twofactor", methods=["GET", "POST"], max_age=60*60*24*7)
 def twofactor():
     referrer = request.args.get("referrer2") or request.referrer
     token = request.args.get("token", "")
     with Transaction() as trans:
         with trans.cursor() as cur:
             if "id" in session:
-                user_id = session["id"]
+                users_id = session["id"]
                 sql = """SELECT email
                          FROM users
-                         WHERE id = %(user_id)s;"""
-                cur.execute(sql, {"user_id": user_id})
+                         WHERE id = %(users_id)s;"""
+                cur.execute(sql, {"users_id": users_id})
                 email = (cur.fetchone() or ("",))[0]
                 destination = referrer
                 
@@ -474,16 +464,16 @@ def twofactor():
                 sql = """SELECT id
                          FROM users
                          WHERE email = %(email)s AND reset_datetime = %(reset_datetime)s;"""
-                cur.execute(sql, {"email": email, "reset_datetime": payload.get("reset_datetime", utcnow())})
-                user_id = (cur.fetchone() or (0,))[0]
+                cur.execute(sql, {"email": email, "reset_datetime": payload.get("reset_datetime", datetime.now(tz=timezone.utc))})
+                users_id = (cur.fetchone() or (0,))[0]
                 destination = url_for(".login")
             
             form = TwoFactorForm(request.form)
             if request.method == "POST" and form.validate():
                 sql = """UPDATE users
-                         SET totp_secret = %(totp_secret)s
-                         WHERE id = %(user_id)s;"""
-                cur.execute(sql, {"user_id": user_id,
+                         SET totp_secret = %(totp_secret)s, reset_datetime = NULL
+                         WHERE id = %(users_id)s;"""
+                cur.execute(sql, {"users_id": users_id,
                                   "totp_secret": form.secret.data,
                                   "reset_datetime": None})
                 return redirect(destination)

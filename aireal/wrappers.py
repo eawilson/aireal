@@ -6,6 +6,12 @@ from .i18n import _
 import pdb
 
 
+
+class AnnotatedTupple(tuple):
+    pass
+
+
+
 class Local(object):
     """ Wrapper around a datetime object thar will print in local time with
         the specified format. Also has a value property which is used

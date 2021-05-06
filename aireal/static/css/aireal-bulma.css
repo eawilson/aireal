@@ -1,0 +1,66 @@
+#logo {
+    color: #8cc63f;
+    }
+
+td, th, a, span, label {
+    -webkit-user-select: none;
+    -moz-user-select: -moz-none;
+    -ms-user-select: none;
+    user-select: none;
+    }
+
+thead.is-sortable, tbody.is-clickable {
+    cursor: pointer;
+    }
+
+.deleted {
+    text-decoration: line-through;
+    color: lightslategray;
+    }
+
+th.sorted-asc:after {
+    font-family: "Font Awesome 5 Free";
+    content: " \f106";
+}
+
+th.sorted-desc:after {
+    font-family: "Font Awesome 5 Free";
+	content: " \f107";
+}
+
+th.unsorted:after {
+    font-family: "Font Awesome 5 Free";
+	content: " \f107";
+    color: transparent;
+}
+
+.main-section {
+    padding: 1.5rem;
+    }
+    
+input[type=checkbox] {
+    transform: scale(1.4);
+    }
+
+
+/* https://stephanwagner.me/only-css-loading-spinner */
+@keyframes spinner {
+  to {transform: rotate(360deg);}
+}
+ 
+.spinner:before {
+  content: '';
+  box-sizing: border-box;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  margin-left: -10px;
+  border-radius: 50%;
+  border: 2px solid #ccc;
+  border-top-color: #000;
+  animation: spinner .6s linear infinite;
+}
+

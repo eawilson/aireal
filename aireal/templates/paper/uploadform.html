@@ -1,0 +1,386 @@
+{% extends "bulma/base.html" %} 
+
+{% import "bulma/macros.html" as macros %}
+
+{% block content %}
+
+    {{ form }}
+        {% for field in form.values() %}
+            <div class="columns">
+                <div class="column is-three-quaters">
+                    {{ macros.render_field(field) }}
+                </div>
+                <div class="column is-one-quater"></div>
+            </div>
+        {% endfor %}
+        
+        <label for="file-progress">0.0 MB</label>
+        <progress id="file-progress" class="progress" value="0" max="1"></progress>
+
+        <label for="files-progress">0 of 0</label>
+        <progress id="files-progress" class="progress" value="0" max="1"></progress>
+        
+        {{ macros.render_buttons(buttons) }}
+    </form>
+    
+    <div id="select-modal" class="modal">
+        <div class="modal-background"></div>
+        <div class="modal-content">
+            <div class="box">
+                <p>{{ _("Previous incomplete uploads present. Please select previous upload ID to resume or 'New' to create a new upload.") }}</p>
+                <table>
+                    <tbody id="select-options" class="is-clickable">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <button class="modal-close is-large"></button>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/spark-md5.3.0.0.min.js') }}" defer></script>
+    <script>
+        defer(function() {
+            var uploadData = {
+                uploading: false,
+                total: 0,
+                remaining: [],
+                failed: [],
+                jqXHR: null,
+                md5Hex: null,
+                md5Base64: null,
+                timeStamp: ""
+                };
+            
+            
+            
+            function submitHandler() {
+                setUploadState(true);
+                return false;
+                }
+            
+            
+            
+            function backHandler() {
+                setUploadState(false);
+                return false;
+                }
+            
+            
+            
+            function resumeHandler() {
+                if (uploadData.uploading) {
+                    return;
+                    }
+                
+                var timeStamp = $(this).data("timestamp");
+                if (!timeStamp) {
+                    timeStamp = Date.now();
+                    }
+                uploadData.timeStamp = timeStamp;
+                setUploadState(true);
+                closeModals();
+                return false;
+                }
+            
+            
+            
+            function changeFiles(e) {
+                if (uploadData.uploading) {
+                    return false;
+                    }
+                
+                var PathSort = function(a, b) {
+                    if (a.webkitRelativePath < b.webkitRelativePath) {
+                        return -1;
+                        }
+                    else if (a.webkitRelativePath > b.webkitRelativePath) {
+                        return 1;
+                        }
+                    return 0;
+                    }
+                
+                uploadData.remaining = [];
+                uploadData.failed = [];
+                uploadData.timeStamp = "";
+                const files = e.target.files;
+                for (var i = 0; i < files.length; ++i) {
+                    uploadData.remaining.push(files[i]);
+                    }
+                uploadData.remaining.sort(PathSort);
+                uploadData.total = uploadData.remaining.length;
+                
+                const fileProgress = document.getElementById("file-progress");
+                fileProgress.labels[0].innerHTML = "{{ _('{} MB') }}".replace("{}", "0.0");
+                fileProgress.max = 1;
+                fileProgress.value = 0;
+                const filesProgress = document.getElementById("files-progress");
+                filesProgress.labels[0].innerHTML = "{{ _('{1} of {2}') }}".replace("{1}", "0").replace("{2}", uploadData.total.toString());
+                filesProgress.max = uploadData.total;
+                filesProgress.value = 0;
+                $("#submit-button").prop("disabled", !files.length);
+                }
+            
+            
+            
+            function nextFile() {
+                if (!uploadData.uploading) {
+                    return;
+                    }
+                
+                const filesProgress = document.getElementById("files-progress");
+                const total = uploadData.total;
+                const current = total - uploadData.remaining.length;
+                filesProgress.value = current;
+                if (current < total) {
+                    filesProgress.labels[0].innerHTML = "{{ _('{1} of {2}') }}".replace("{1}", (current + 1).toString()).replace("{2}", total.toString());
+                    }
+                    
+                if (uploadData.remaining.length) {
+                    hashFile();
+                    }
+                
+                else if (uploadData.failed.length) {
+                    setUploadState(false);
+                    const fileProgress = document.getElementById("file-progress");
+                    fileProgress.labels[0].innerHTML = "{{ _('{} files failed to upload. Click upload to retry') }}".replace("{}", uploadData.failed.length.toString());
+                    }
+                
+                else {
+                    const files = $("input[name='files']")[0].files;
+                    uploadData.jqXHR = $.ajax({type: "POST",
+                                                dataType: 'json',
+                                                data: {csrf: $("input[name='csrf']")[0].value,
+                                                    directory: files[0].webkitRelativePath.split("/")[0],
+                                                    timestamp: uploadData.timeStamp},
+                                                success: processingComplete,
+                                                error: processingFailed});
+                    }
+                }
+            
+            
+            
+            function processingComplete() {
+                setUploadState(false);
+                const fileProgress = document.getElementById("file-progress");
+                fileProgress.labels[0].innerHTML = "{{ _('Complete') }}";
+                }
+            
+            
+            function processingFailed() {
+                setUploadState(false);
+                const files = $("input[name='files']")[0].files;
+                uploadData.failed.push(files[0]);
+                const fileProgress = document.getElementById("file-progress");
+                fileProgress.labels[0].innerHTML = "{{ _('Error during file processing. Click upload to retry') }}";
+                }
+            
+            
+            
+            function hashFile() {
+                if (!uploadData.uploading) {
+                    return;
+                    }
+                
+                const file = uploadData.remaining[uploadData.remaining.length - 1];
+                const chunkSize = 2097152; // Read in chunks of 2MB
+                const chunks = Math.ceil(file.size / chunkSize);
+                var currentChunk = 0;
+                const spark = new SparkMD5.ArrayBuffer();
+                const fileReader = new FileReader();
+
+                fileReader.onload = function(e) {
+                    spark.append(e.target.result);
+                    ++currentChunk;
+
+                    if (currentChunk < chunks) {
+                        loadNext();
+                        }
+                    else {
+                        uploadData.md5Hex = spark.end();
+                        uploadData.md5Base64 = btoa(spark.end(true));
+                        getSignature();
+                        }
+                    };
+
+                fileReader.onerror = function(e) {
+                    if (!uploadData.uploading) {
+                        return;
+                        }
+                    
+                    uploadData.failed.push(uploadData.remaining.pop());
+                    nextFile();
+                    };
+
+                function loadNext() {
+                    if (!uploadData.uploading) {
+                        return;
+                        }
+
+                    const start = currentChunk * chunkSize;
+                    const end = ((start + chunkSize) >= file.size) ? file.size : start + chunkSize;
+                    fileReader.readAsArrayBuffer(file.slice(start, end));
+                    }
+
+                loadNext();            
+                }
+            
+            
+            
+            function getSignature() {
+                if (!uploadData.uploading) {
+                    return;
+                    }
+                
+                const file = uploadData.remaining[uploadData.remaining.length - 1];
+                uploadData.jqXHR = $.ajax({type: "POST",
+                                            dataType: 'json',
+                                            data: {csrf: $("input[name='csrf']")[0].value,
+                                                path: file.webkitRelativePath,
+                                                md5: uploadData.md5Hex,
+                                                timestamp: uploadData.timeStamp},
+                                            success: handleSignature,
+                                            error: handleUploadError});
+                }
+            
+            
+            
+            function handleSignature(data, textStatus, jqXHR) {
+                if (!uploadData.uploading) {
+                    return;
+                    }
+                
+                switch (data.outcome) {
+                    case "required":
+                        if (!uploadData.timeStamp) {
+                            uploadData.timeStamp = data.timeStamp;
+                            }
+                        uploadSignedFile(data.signedUrl);
+                        break;
+                    
+                    case "skip": //either exists or not required
+                        handleUploadSuccess();
+                        break;
+                    
+                    case "mismatch":
+                        $(":file").trigger("change");
+                        const fileProgress = document.getElementById("file-progress");
+                        fileProgress.labels[0].innerHTML = "{{ _('ERROR: File {} clashes with a different file of the same name. Please retry upload to a different folder') }}".replace("{}", data.path);
+                        setUploadState(false);
+                        break;
+                    
+                    case "select":
+                        const optionsTbody = $("#select-options");
+                        optionsTbody.empty();
+                        var options = "";
+                        for(var i = 0; i < data.options.length; ++i) {
+                            options += '<tr data-timestamp="' + data.options[i].timeStamp + '"><td>' + data.options[i].text + '</td></tr>';
+                            }
+                        options += '<tr data-timestamp=""><td>New</td></tr>'
+                        optionsTbody.append(options);
+                        openModal("#select-modal");
+                        setUploadState(false);
+                        break;
+                    }
+                }
+            
+            
+            
+            function uploadSignedFile(signedUrl) {
+                if (!uploadData.uploading) {
+                    return;
+                    }
+                
+                function xhrWithProgress(e) {
+                    const xhr = new window.XMLHttpRequest();
+                    function updateProgress(e) {
+                        if (e.lengthComputable) {
+                            const fileProgress = document.getElementById("file-progress");
+                            fileProgress.labels[0].innerHTML = "{{ _('{} MB') }}".replace("{}", (e.loaded / 1000000).toFixed(1).toString());
+                            fileProgress.max = e.total;
+                            fileProgress.value = e.loaded;
+                            }
+                        }
+                    xhr.upload.addEventListener("progress", updateProgress, false);
+                    //xhr.setRequestHeader("Content-MD5", uploadData.md5Base64);
+                    return xhr;
+                    }
+                
+                
+                const file = uploadData.remaining[uploadData.remaining.length - 1];
+                uploadData.jqXHR = $.ajax({type: "PUT",
+                                        url: signedUrl,
+                                        contentType: "binary/octet-stream",
+                                        processData: false,
+                                        data: file,
+                                        success: handleUploadSuccess,
+                                        error: handleUploadError,
+                                        xhr: xhrWithProgress});
+                }
+            
+            
+            
+            function handleUploadSuccess(data, textStatus, jqXHR) {
+                if (!uploadData.uploading) {
+                    return;
+                    }
+                
+                uploadData.remaining.pop();
+                nextFile();
+                }                    
+            
+
+            
+            function handleUploadError(jqXHR, textStatus, errorThrown) {
+                if (!uploadData.uploading) {
+                    return;
+                    }
+                
+                
+                
+                
+                uploadData.failed.push(uploadData.remaining.pop());
+                nextFile();
+                }
+            
+            
+            
+            function setUploadState(state) {
+                if (state == uploadData.uploading) {
+                    return;
+                    }
+                
+                uploadData.uploading = state;
+                if (state && (uploadData.remaining.length || uploadData.failed.length)) {
+                    if (!uploadData.remaining.length) {
+                        uploadData.remaining = uploadData.failed;
+                        uploadData.failed = [];
+                        uploadData.total = uploadData.remaining.length;
+                        }
+                    $("#submit-button").prop("disabled", true);
+                    $(":file").prop("disabled", true);
+                    $("#back-button").off("click", navigateHandler);
+                    $("#back-button").on("click", backHandler);
+                    nextFile();
+                    }
+                    
+                else if (!state) {
+                    $("#submit-button").prop("disabled", !(uploadData.remaining.length || uploadData.failed.length));
+                    $(":file").prop("disabled", false);
+                    $("#back-button").off("click", backHandler);
+                    $("#back-button").on("click", navigateHandler);
+                    if (uploadData.jqXHR) {
+                        uploadData.jqXHR.abort();
+                        }
+                    }
+                }
+            
+            
+            $("#submit-button").on("click", submitHandler);
+            $("#submit-button").prop("disabled", true);
+            $(":file").on("change", changeFiles);
+            $("#select-options").on("click", "tr", resumeHandler);
+            });
+        //# sourceURL=uploadform.js
+    </script>
+
+{% endblock %}

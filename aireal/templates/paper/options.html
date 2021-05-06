@@ -1,4 +1,4 @@
 <option value="" selected disabled hidden></option>
-{% for val, text in items %}
-   <option value="{{ val }}">{{ text }}</option>
+{% for item in items %}
+   <option value="{{ item[0] }}" {{ item.disabled }}>{{ item[1] }}</option>
 {% endfor %}

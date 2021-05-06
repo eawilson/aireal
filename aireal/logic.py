@@ -1,8 +1,8 @@
 import pdb
+from collections import defaultdict
 
-from flask import session
+from flask import session, request
 
-from.utils import utcnow
 
 
 
@@ -209,7 +209,7 @@ def upsert(table, unique_data, other_data, conn):
         #conn.execute(m2mtable.insert(), data)
         #items = ", ".join(names[sec_id] for sec_id in to_ins)
         #details = {other.name: items}
-        #crudlog(table.name, row_id, "Added", details, conn)
+        #crudrecord(table.name, row_id, "Added", details, conn)
     
     #if to_del:
         #sql = m2mtable.delete().where(and_(primary == row_id,
@@ -217,7 +217,7 @@ def upsert(table, unique_data, other_data, conn):
         #conn.execute(sql)
         #items = ", ".join(names[sec_id] for sec_id in to_del)
         #details = {other.name: items}
-        #crudlog(table.name, row_id, "Removed", details, conn)
+        #crudrecord(table.name, row_id, "Removed", details, conn)
 
 
 
@@ -239,10 +239,10 @@ def upsert(table, unique_data, other_data, conn):
                       #in values.items() 
                       #if v != old_values.get(k, None)}
     #if changed_values:
-        #crudlog(table.name, row_id, action, changed_values, conn)
+        #crudrecord(table.name, row_id, action, changed_values, conn)
     #if deleted is not None:
         #action = "Deleted" if deleted else "Restored"
-        #crudlog(table.name, row_id, action, {}, conn)
+        #crudrecord(table.name, row_id, action, {}, conn)
     #return row_id
 
 
@@ -255,17 +255,7 @@ def upsert(table, unique_data, other_data, conn):
 
 
 
-loggable = {"users": ["email", "forename", "surname"],
-            "projects": ["name"]
-           }
-
-joins = {"users": {"groups": ("users_groups", "user_id", "group_id"),
-                   "projects": ("users_projects", "user_id", "project_id")}
-        }
-
-
-
-def crud(cur, table, new, old={}, **choices):
+def krud(cur, table, new, old={}, logable_columns=(), **choices):
     changed = {}
     for k, v in new.items():
         if not isinstance(v, list) and v != old.get(k, None):
@@ -305,7 +295,7 @@ def crud(cur, table, new, old={}, **choices):
                         break
                 details[k] = v
     if action == "Created" or details:
-        crudlog(cur, table=table, row_id=row_id, action=action, details=details)
+        crudrecord(cur, table=table, row_id=row_id, action=action, details=details)
     
     for k, v in new.items():
         if isinstance(v, list):
@@ -321,18 +311,18 @@ def crud(cur, table, new, old={}, **choices):
                 data = [{col1: row_id, col2: sec_id} for sec_id in to_ins]
                 cur.executemany(sql, data)
                 items = ", ".join(names[sec_id] for sec_id in to_ins)
-                crudlog(cur, table=table, row_id=row_id, action="Added", details={k: items})
+                crudrecord(cur, table=table, row_id=row_id, action="Added", details={k: items})
             
             if to_del:
                 sql = f"DELETE FROM {link_table} WHERE {col1} = %({col1})s AND {col2} = %({col2})s;"
                 data = [{col1: row_id, col2: sec_id} for sec_id in to_del]
                 cur.executemany(sql, data)
                 items = ", ".join(names[sec_id] for sec_id in to_del)
-                crudlog(cur, table=table, row_id=row_id, action="Removed", details={k: items})
+                crudrecord(cur, table=table, row_id=row_id, action="Removed", details={k: items})
         
     if deleted is not None:
         action = "Deleted" if deleted else "Restored"
-        crudlog(cur, table=table, row_id=row_id, action=action)
+        crudrecord(cur, table=table, row_id=row_id, action=action)
     return row_id
     _("Created")
     _("Edited")
@@ -344,15 +334,253 @@ def crud(cur, table, new, old={}, **choices):
 
 
 
-def crudlog(cur, **data):
+def crudrecord(cur, **data):
     details = data.get("details", {})
     data["details"] = "\t".join(f"{k}={v}" for k, v in sorted(details.items()))
     data["user_id"] = session.get("id", None)
-    data["datetime"] = utcnow()
     
-    sql = "INSERT INTO logs (tablename, row_id, action, details, user_id, datetime) VALUES" \
-          " (%(table)s, %(row_id)s, %(action)s, %(details)s, %(user_id)s, %(datetime)s)"
+    sql = "INSERT INTO crudrecord (tablename, row_id, action, details, user_id) VALUES" \
+          " (%(table)s, %(row_id)s, %(action)s, %(details)s, %(user_id)s)"
     cur.execute(sql, data)
 
 
+
+
+
+
+
+
+
+
+
+
+
+def record_edit(cur, tablename, new, old={}, labels={}, **choices):
+    details = {}
+    edited = {}
+    addedremoved = defaultdict(dict)
+    for k, v in list(new.items()):
+        if isinstance(v, list):
+            new_ids = set(v)
+            old_ids = set(old.get(k, ()))
+            addedremoved[k]["Added"] = sorted(new_ids - old_ids)
+            addedremoved[k]["Removed"] = sorted(old_ids - new_ids)
+        
+        elif isinstance(v, dict):
+            edited[k] = v
+            for k1, v1 in set(v.items()) - set(old.get(k, {}).items()):
+                details[labels.get(k)] = v
+        
+        elif v != old.get(k, None):
+            edited[k] = v
+            for option in choices.get(k, ()):
+                if option[0] == v:
+                    details[labels.get(k)] = option[1]
+                    break
+            else:
+                details[labels.get(k)] = v
+
+    # No matching label therefore not user entered therefore don't record
+    details.pop(None, None)
+    
+    keys = sorted(edited.keys())
+    if "id" in old:
+        action = "Edited"
+        row_id = old["id"]
+        if edited:
+            updates = ", ".join(f"{k} = %({k})s" for k in keys)
+            sql = f"UPDATE {tablename} SET {updates} WHERE id = {row_id};"
+            cur.execute(sql, edited)
+    else:
+        action = "Created"
+        columns = ", ".join(keys)
+        values = ", ".join(f"%({k})s" for k in keys)
+        sql = f"INSERT INTO {tablename} ({columns}) VALUES ({values}) RETURNING id;"
+        cur.execute(sql, edited)
+        row_id = cur.fetchone()[0]
+    
+    
+    log_sql = """INSERT INTO editrecord (tablename, row_id, action, details, users_id, ip_address)
+                 VALUES (%(tablename)s, %(row_id)s, %(action)s, %(details)s, %(users_id)s, %(ip_address)s);"""
+    log_data = {"tablename": tablename,
+                "row_id": row_id,
+                "users_id": session.get("id", None),
+                "ip_address": request.remote_addr}
+    
+    if action == "Created" or details:
+        cur.execute(log_sql, {"action": action, "details": details, **log_data})
+    
+    for foreigntable, actions in addedremoved.items():
+        for action, keys in actions.items():
+            if keys:
+                linktable = "_".join(sorted((tablename, foreigntable)))
+                values = [{"local": row_id, "foreign": key} for key in keys]
+                foreignkey = f"{foreigntable}_id" if isinstance(keys[0], int) else "name"
+                if action == "Added":
+                    sql = f"INSERT INTO {linktable} ({tablename}_id, {foreignkey}) VALUES (%(local)s, %(foreign)s);"
+                else:
+                    sql = f"DELETE FROM {linktable} WHERE {tablename}_id = %(local)s AND {foreignkey} = %(foreign)s;"
+                cur.executemany(sql, values)
+                details = {labels[foreigntable]: [option[1] for option in choices[foreigntable] if option[0] in keys]}
+                cur.execute(log_sql, {"action": action, "details": details, **log_data})
+            
+    if "deleted" in edited:
+        action = "Deleted" if deleted else "Restored"
+        cur.execute(log_sql, {"action": action, "details": None, **log_data})
+    return row_id
+    _("Created")
+    _("Edited")
+    _("Added")
+    _("Removed")
+    _("Deleted")
+    _("Restored")
+
+
+
+
+
+
+def record_form(cur, tablename, action, row_id, form, old={}):
+    edited = {}
+    added = defaultdict(list)
+    removed = defaultdict(list)
+    
+    for fieldname, field in form.items():
+        try:
+            data = field.data
+        except AttributeError:
+            continue
+        
+        if data != old.get(fieldname):
+            label = field._label.unlocalised
+            if isinstance(data, list):
+                new_ids = set(data)
+                old_ids = set(old.get(fieldname, ()))
+                add_ids = new_ids - old_ids
+                del_ids = old_ids - new_ids
+                for choice in field.choices:
+                    if choice[0] in add_ids:
+                        added[label].append(getattr(choice[1], "unlocalised", choice[1]))
+                    elif choice[0] in del_ids:
+                        removed[label].append(getattr(choice[1], "unlocalised", choice[1]))
+            
+            else:
+                for choice in getattr(field, "choices", ()):
+                    if choice[0] == data:
+                        data = getattr(choice[1], "unlocalised", choice[1])
+                        break
+                edited[label] = data
+
+    deleted = edited.pop("deleted", None)
+    
+    sql = """INSERT INTO editrecord (tablename, row_id, action, details, users_id, ip_address)
+             VALUES (%(tablename)s, %(row_id)s, %(action)s, %(details)s, %(users_id)s, %(ip_address)s);"""
+    values = {"tablename": tablename,
+              "row_id": row_id,
+              "users_id": session.get("id", None),
+              "ip_address": request.remote_addr}
+    
+    if edited:
+        cur.execute(sql, {"action": action, "details": edited, **values})
+    
+    if added:
+        cur.execute(sql, {"action": "Added", "details": added, **values})
+    
+    if removed:
+        cur.execute(sql, {"action": "Removed", "details": removed, **values})
+    
+    if deleted is not None:
+        cur.execute(sql, {"action": "Deleted" if deleted else "Restored", **values})
+    
+    return row_id
+    _("Created")
+    _("Edited")
+    _("Added")
+    _("Removed")
+    _("Deleted")
+    _("Restored")
+
+
+
+def perform_edit(cur, tablename, new, old={}, form=None):
+    edited = {}
+    added = {}
+    removed = {}
+    
+    for k, v in new.items():
+        if isinstance(v, list):
+            new_ids = set(v)
+            old_ids = set(old.get(k, ()))
+            added[k] = sorted(new_ids - old_ids)
+            removed[k] = sorted(old_ids - new_ids)
+        
+        elif v != old.get(k):
+            edited[k] = v
+    
+    keys = edited.keys()
+    if "id" in old:
+        action = "Edited"
+        row_id = old["id"]
+        if edited:
+            updates = ", ".join(f"{k} = %({k})s" for k in keys)
+            sql = f"UPDATE {tablename} SET {updates} WHERE id = {row_id};"
+            cur.execute(sql, edited)
+    else:
+        action = "Created"
+        columns = ", ".join(keys)
+        values = ", ".join(f"%({k})s" for k in keys)
+        sql = f"INSERT INTO {tablename} ({columns}) VALUES ({values}) RETURNING id;"
+        cur.execute(sql, edited)
+        row_id = cur.fetchone()[0]
+    
+    for foreignname, keys in added.items():
+        if keys:
+            linktable = "_".join(sorted((tablename, foreignname)))
+            foreignkey = f"{foreignname}_id" if isinstance(keys[0], int) else "name"
+            values = [{"local": row_id, "foreign": k} for k in keys]
+            sql = f"INSERT INTO {linktable} ({tablename}_id, {foreignkey}) VALUES (%(local)s, %(foreign)s);"
+            cur.executemany(sql, values)
+        
+    for foreignname, keys in removed.items():
+        if keys:
+            linktable = "_".join(sorted((tablename, foreignname)))
+            foreignkey = f"{foreignname}_id" if isinstance(keys[0], int) else "name"
+            values = [{"local": row_id, "foreign": k} for k in keys]
+            sql = f"DELETE FROM {linktable} WHERE {tablename}_id = %(local)s AND {foreignkey} = %(foreign)s;"
+            cur.executemany(sql, values)
+    
+    if form:
+        record_form(cur, tablename, action, row_id, form, old)
+    return row_id
+
+
+
+def perform_delete(cur, tablename, row_id, pk="id"):
+    sql = f"UPDATE {tablename} SET deleted = true WHERE deleted = false AND {pk} = %(row_id)s;"
+    cur.execute(sql, {"row_id": row_id})
+    if cur.rowcount:
+        sql = """INSERT INTO editrecord (tablename, row_id, action, users_id, ip_address)
+                 VALUES (%(tablename)s, %(row_id)s, %(action)s, %(users_id)s, %(ip_address)s);"""
+        cur.execute(sql, {"tablename": tablename,
+                          "row_id": row_id,
+                          "action": "Deleted",
+                          "users_id": session.get("id", None),
+                          "ip_address": request.remote_addr})
+    
+    
+    
+def perform_restore(cur, tablename, row_id, pk="id"):
+    sql = f"UPDATE {tablename} SET deleted = false WHERE deleted = true AND {pk} = %(row_id)s;"
+    cur.execute(sql, {"row_id": row_id})
+    if cur.rowcount:
+        sql = """INSERT INTO editrecord (tablename, row_id, action, users_id, ip_address)
+                 VALUES (%(tablename)s, %(row_id)s, %(action)s, %(users_id)s, %(ip_address)s);"""
+        cur.execute(sql, {"tablename": tablename,
+                          "row_id": row_id,
+                          "action": "Restored",
+                          "users_id": session.get("id", None),
+                          "ip_address": request.remote_addr})
+    
+    
+    
 
