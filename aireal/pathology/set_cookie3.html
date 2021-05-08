@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="robots" content="noindex,nofollow">
+    </head>
+    <body>
+        <script>
+            const url = new URL(window.location.href);
+            const params = url.searchParams;
+            const cookies = JSON.parse(params.get("cookies"));
+            for(const key in cookies) {
+                var cookie = key+"="+encodeURIComponent(cookies[key])+"; samesite=lax";
+                console.log(cookie);
+                document.cookie = cookie;
+                }
+            //window.location.replace(params.get("destination"));
+        </script>
+    </body>
+</html>

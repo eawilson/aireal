@@ -14,7 +14,7 @@ from ..forms import NameForm
 
 
 
-@app.route("/pathology_sites/<int:pathologysite_id>/log")
+@app.route("/pathologysites/<int:pathologysite_id>/log")
 def pathologysite_log(pathologysite_id):
     with Cursor() as cur:
         table = log_table(cur, "pathologysite", pathologysite_id)
@@ -25,8 +25,8 @@ def pathologysite_log(pathologysite_id):
 
         
 
-@app.route("/pathology_sites/new", defaults={"pathologysite_id": None}, methods=["GET", "POST"])
-@app.route("/pathology_sites/<int:pathologysite_id>/edit", methods=["GET", "POST"])
+@app.route("/pathologysites/new", defaults={"pathologysite_id": None}, methods=["GET", "POST"])
+@app.route("/pathologysites/<int:pathologysite_id>/edit", methods=["GET", "POST"])
 def edit_pathologysite(pathologysite_id):
     with Transaction() as trans:
         with trans.cursor() as cur:
@@ -66,7 +66,7 @@ def edit_pathologysite(pathologysite_id):
 
 
 
-@app.route("/pathology_sites")
+@app.route("/pathologysites")
 def pathologysite_list():
     body = []
     with Cursor() as cur:
