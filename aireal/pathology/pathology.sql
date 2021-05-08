@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS slide (
 	attr JSONB DEFAULT '{}'::jsonb NOT NULL, 
     users_id INTEGER NOT NULL, 
     pathologysite_id INTEGER, 
-    clinical_details VARCHAR NOT NULL, 
+    clinical_details VARCHAR DEFAULT '' NOT NULL, 
     status VARCHAR NOT NULL, 
     deleted BOOLEAN DEFAULT FALSE NOT NULL, 
 	CONSTRAINT pk_slide PRIMARY KEY (id), 

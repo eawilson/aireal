@@ -34,5 +34,5 @@ class CompletionForm(Form):
 class SlideForm(Form):
     def definition(self):
         self.name = TextInput(_("Name"))
-        self.pathology_site_id = SelectInput(_("Site"))
+        self.pathologysite_id = SelectInput(_("Site"))
         self.project_id = SelectInput(_("Site"))

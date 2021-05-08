@@ -9,11 +9,12 @@ import tempfile
 import subprocess
 from collections import defaultdict
 
+import requests
 import pyvips
 
 
 
-def main(input_dir, output_dir, name=None, quality=None):
+def main(input_dir, output_dir, name=None, quality=None, callback=None):
     """ Create a deepzoom pyramid of images from slide images in input directory.
         Use current working directory to write output files temporarily before
         copying to s3 destination. Requres aws cli v2.
@@ -77,6 +78,10 @@ def main(input_dir, output_dir, name=None, quality=None):
     
     for tempdir in cleanup:
         tempdir.cleanup()
+    
+    
+    if callback:
+        requests.post(callback)
 
 
 
@@ -86,6 +91,7 @@ if __name__ == "__main__":
     parser.add_argument('-o', "--output", help="Destination directory for output images.", dest="output_dir", required=True)
     parser.add_argument('-n', "--name", help="Name of image. If not provided defaults to input directory.")
     parser.add_argument('-q', "--quality", help="Quality (0 - 100) of output jpeg tiles.", type=int)
+    parser.add_argument('-c', "--callback", help="URL to make a post request to on completion of processing.")
     args = parser.parse_args()
     
     try:

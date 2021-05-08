@@ -35,6 +35,12 @@ def pathology_navbar():
 
 
 
+@app.insecure_route("/zz")
+def zz():
+    return(render_page("set_cookie3.html"))
+    
+
+
 @app.route("/slides")
 def slide_list():
     sql = """SELECT slide.id, slide.name, users.fullname, pathologysite.name, slide.created_datetime, slide.status, slide.deleted
@@ -85,14 +91,15 @@ def auth_slide(slide_id):
     if not tiles_cdn_base_url.endswith("/"):
         tiles_cdn_base_url = f"{tiles_cdn_base_url}/"
     
-    wildcard_url = f"{tiles_cdn_base_url}{slide_id}/{directory_name}/*"
+    wildcard_url = f"{tiles_cdn_base_url}{slide_id}/*"
     private_key = config.get("TILES_CDN_PRIVATE_KEY") or abort(exceptions.NotImplemented)
     cookies = cloudfront_sign_cookies(wildcard_url, private_key)
     
     set_cookies_url = f"{tiles_cdn_base_url}set_cookie.html"
+    set_cookies_url = url_for(".zz")
     url_parts = list(urlparse(set_cookies_url))
     destination = request.host_url.rstrip("/")+url_for(".view_slide", slide_id=slide_id)
-    params = {"cookies": json.dumps(cookies), "destination": destination}
+    params = {"cookies": cookies, "destination": destination}
     url_parts[4] = urlencode(params)
     set_cookies_url = urlunparse(url_parts)
     
@@ -123,7 +130,7 @@ def view_slide(slide_id):
 @app.route("/slides/<int:slide_id>/edit", methods=["GET", "POST"])
 def edit_slide(slide_id):
     with Cursor() as cur:
-        sql = """SELECT slide.id, slide.name, slide.pathologysite_id, slide.project_id, slide.deleted
+        sql = """SELECT slide.id, slide.name, slide.clinical_details_id, slide.project_id, slide.deleted
                  FROM slide
                  INNER JOIN project_users ON slide.project_id = project_users.project_id
                  WHERE slide.id = %(slide_id)s AND project_users.users_id = %(users_id)s;"""
@@ -279,13 +286,13 @@ def new_slide():
             directory = form.directory.data
             timestamp = form.timestamp.data
             
-            pdb.set_trace()
             new = {"name": directory,
                 #"project_id": form.project_id.data,
                 "directory_name": directory,
                 "user_directory_timestamp": f"{session['id']}/{directory}/{timestamp}",
                 #"pathologysite_id": form.pathologysite_id.data,
                 "users_id": session["id"],
+                "clinical_details": "",
                 "status": "Uploaded"}
             #project_id_choices = ((form.project_id.data, form.project_id.data),)
             #pathologysite_id_choices = ((form.pathologysite_id.data, form.pathologysite_id.data),)
@@ -297,7 +304,7 @@ def new_slide():
                             slide_id = perform_edit(cur, "slide", new, {})
                                             #project_id=project_id_choices,
                                             #pathologysite_id=pathologysite_id_choices)
-                        except UniqueViolation: #
+                        except UniqueViolation as e: #
                             trans.rollback()
                             continue
                         trans.commit()

@@ -201,14 +201,16 @@ def run_task(task, command):
                 taskDefinition = task_definitions[task],
                 networkConfiguration = {
                     "awsvpcConfiguration": {
-                        "subnets": [subnet],
+                        "subnets": ["subnet-038d89f677b086a80"],
+                        "assignPublicIp": "ENABLED",
                         }
                     },
                 overrides = {
                     "containerOverrides": [{
                             "name": container,
-                            "command": command
-                            }]
+                            "command": command,
+                            }],
+                    "taskRoleArn": "arn:aws:iam::387676495311:role/Deepzoom",
                     }
                 )
             print(response)
@@ -220,11 +222,6 @@ def run_task(task, command):
                 for arn in response["taskDefinitionArns"]:
                     name = arn.split("/")[-1].split(":")[0]
                     task_definitions[name] = arn
-    
-    
-    
-    
-    
     
     
     
