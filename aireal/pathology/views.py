@@ -71,13 +71,17 @@ def slide_list():
 def auth_slide(slide_id):
     sql = """SELECT slide.name, slide.directory_name, slide.status
              FROM slide
-             WHERE slide.id = %(slide_id)s AND slide.deleted = FALSE;"""
+             WHERE slide.id = %(slide_id)s AND slide.deleted = FALSE AND slide.status = 'Ready';"""
     with Cursor() as cur:
         cur.execute(sql, {"users_id": session["id"], "slide_id": slide_id})
-        name, directory_name, status = cur.fetchone() or abort(exceptions.NotFound)
+        row = cur.fetchone()
+        if not row:
+            return redirect(url_for(".slide_list"))
+        name, directory_name, status = row
     
-    if False:#status != "Ready":
-        return redirect(request.referrer)
+        sql = """INSERT INTO editrecord (tablename, row_id, action, user_id, ip_address)
+                 VALUES ('slide', %(row_id)s, 'Viewed', %(user_id)s, %(ip_address)s);"""
+        cur.execute(sql, {"row_id": slide_id, "user_id": session["id"], "ip_address": request.remote_addr})
     
     config = current_app.config
     private_key = config.get("TILES_CDN_PRIVATE_KEY") or abort(exceptions.NotImplemented)
