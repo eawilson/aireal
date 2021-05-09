@@ -203,7 +203,7 @@ class Blueprint(flask.Blueprint):
                                             max_age=max_age,
                                             salt=salt or endpoint)
                     if token or "id" in session:
-                        return function(token, *args, **kwargs)
+                        return function(*args, **kwargs, data=token)
                     else:
                         if "User-agent" in request.headers:
                             return redirect(url_for("auth.root"))

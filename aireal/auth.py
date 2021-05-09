@@ -340,9 +340,10 @@ def change_password():
 
 
 @app.signed_route("/setpassword", methods=["GET", "POST"], max_age=60*60*24*7)
-def set_password(token):
-    reset_datetime = token.get("reset_datetime", datetime.now(tz=timezone.utc))
-    email = token.get("email", "")
+def set_password(data):
+    reset_datetime = data.get("reset_datetime", datetime.now(tz=timezone.utc))
+    email = data.get("email", "")
+    token = request.args.get("token", "")
     
     with Cursor() as cur:
         sql = """SELECT id, totp_secret
@@ -397,7 +398,7 @@ def send_setpassword_email(cur, email):
 
 
 @app.signed_route("/qrcode/<string:email>/<string:secret>", salt="set_password", max_age=60*60*24*7)
-def qrcode(token, email, secret):
+def qrcode(email, secret, data):
     
     service = quote(current_app.config.get("NAME", "<APP>"))
     email = quote(email)
@@ -418,9 +419,10 @@ def qrcode(token, email, secret):
 
 
 @app.signed_route("/twofactor", methods=["GET", "POST"], salt="set_password", max_age=60*60*24*7)
-def twofactor(token):
+def twofactor(data):
     referrer = request.args.get("referrer2") or request.referrer
     token = request.args.get("token", "")
+    
     with Transaction() as trans:
         with trans.cursor() as cur:
             if "id" in session:
@@ -433,11 +435,11 @@ def twofactor(token):
                 destination = referrer
                 
             else:
-                email = token.get("email")
+                email = data.get("email", "")
                 sql = """SELECT id
                          FROM users
                          WHERE email = %(email)s AND reset_datetime = %(reset_datetime)s;"""
-                cur.execute(sql, {"email": email, "reset_datetime": token.get("reset_datetime", datetime.now(tz=timezone.utc))})
+                cur.execute(sql, {"email": email, "reset_datetime": data.get("reset_datetime", datetime.now(tz=timezone.utc))})
                 users_id = (cur.fetchone() or (0,))[0]
                 destination = url_for(".login")
             
