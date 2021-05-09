@@ -79,9 +79,9 @@ def auth_slide(slide_id):
             return redirect(url_for(".slide_list"))
         name, directory_name, status = row
     
-        sql = """INSERT INTO editrecord (tablename, row_id, action, user_id, ip_address)
-                 VALUES ('slide', %(row_id)s, 'Viewed', %(user_id)s, %(ip_address)s);"""
-        cur.execute(sql, {"row_id": slide_id, "user_id": session["id"], "ip_address": request.remote_addr})
+        sql = """INSERT INTO editrecord (tablename, row_id, action, users_id, ip_address)
+                 VALUES ('slide', %(row_id)s, 'Viewed', %(users_id)s, %(ip_address)s);"""
+        cur.execute(sql, {"row_id": slide_id, "users_id": session["id"], "ip_address": request.remote_addr})
     
     config = current_app.config
     private_key = config.get("TILES_CDN_PRIVATE_KEY") or abort(exceptions.NotImplemented)
@@ -262,7 +262,6 @@ def new_slide():
                     for suffix in count():
                         new["name"] = f"{directory} ({suffix})" if suffix else directory
                         try:
-                            pdb.set_trace()
                             cur.execute(sql, new)
                             slide_id = cur.fetchone()[0]
                             
@@ -304,16 +303,16 @@ def new_slide():
 
 
 @app.signed_route("/slides/callback", max_age=60*60)
-def deepzoom_callback(token):
+def deepzoom_callback(data):
     with Cursor() as cur:
-        quality = token.pop("quality", "Default")
+        quality = data.pop("quality", "Default")
         sql = """UPDATE slide SET status = %(new_status)s
                  WHERE id = %(slide_id)s AND status = %(old_status)s;"""
-        cur.execute(sql, token)
+        cur.execute(sql, data)
         
         sql = """INSERT INTO editrecord (tablename, row_id, action, details)
                  VALUES ('slide', %(row_id)s, 'Processed', %(details)s);"""
-        cur.execute(sql, {"row_id": token["slide_id"], "details": {"Quality": quality}})
+        cur.execute(sql, {"row_id": data["slide_id"], "details": {"Quality": quality}})
     
     return {}
 
