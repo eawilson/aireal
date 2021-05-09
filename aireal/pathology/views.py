@@ -250,8 +250,7 @@ def new_slide():
             new = {"name": directory,
                    "directory_name": directory,
                    "user_directory_timestamp": f"{session['id']}/{directory}/{timestamp}",
-                   "users_id": session["id"],
-                   "status": "Uploaded"}
+                   "users_id": session["id"]}
             
             slide_id = None
             with Transaction() as trans:
@@ -259,6 +258,7 @@ def new_slide():
                     for suffix in count():
                         new["name"] = f"{directory} ({suffix})" if suffix else directory
                         try:
+                            pdb.set_trace()
                             cur.execute(sql, new)
                             slide_id = cur.fetchone()[0]
                             
@@ -307,8 +307,8 @@ def deepzoom_callback(token):
         cur.execute(sql, token)
         
         sql = """INSERT INTO editrecord (tablename, row_id, action, details)
-                 VALUES ('slide', %(row_id)s, 'Edited', %(details)s);"""
-        cur.execute(sql, {"row_id": token["slide_id"], "details": {"Status": token["new_status"]}})
+                 VALUES ('slide', %(row_id)s, 'Processed', %(details)s);"""
+        cur.execute(sql, {"row_id": token["slide_id"], "details": {"Quality": token["quality"]}})
     
     return {}
 
