@@ -302,13 +302,14 @@ def new_slide():
 @app.signed_route("/slides/callback", max_age=60*60)
 def deepzoom_callback(token):
     with Cursor() as cur:
+        quality = token.pop("quality", "Default")
         sql = """UPDATE slide SET status = %(new_status)s
                  WHERE id = %(slide_id)s AND status = %(old_status)s;"""
         cur.execute(sql, token)
         
         sql = """INSERT INTO editrecord (tablename, row_id, action, details)
                  VALUES ('slide', %(row_id)s, 'Processed', %(details)s);"""
-        cur.execute(sql, {"row_id": token["slide_id"], "details": {"Quality": token["quality"]}})
+        cur.execute(sql, {"row_id": token["slide_id"], "details": {"Quality": quality}})
     
     return {}
 
