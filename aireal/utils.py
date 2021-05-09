@@ -220,7 +220,7 @@ class Blueprint(flask.Blueprint):
 
 
 
-def _validate_token(token, max_age, salt=salt):
+def _validate_token(token, max_age, salt):
     if token:
         secret = current_app.config["SECRET_KEY"]
         s = URLSafeTimedSerializer(secret, salt=salt)

@@ -12,7 +12,7 @@ from werkzeug import exceptions
 
 from urllib.parse import quote
 
-from ..utils import Cursor, Transaction, navbar, abort, tablerow, render_page, render_template, unique_key, dict_from_select, Blueprint, sign_token, absolute_url_for, build_url, 
+from ..utils import Cursor, Transaction, navbar, abort, tablerow, render_page, render_template, unique_key, dict_from_select, Blueprint, sign_token, absolute_url_for, build_url
 from ..wrappers import Local
 from ..logic import perform_edit, perform_delete, perform_restore
 from ..view_helpers import log_table
@@ -274,15 +274,12 @@ def new_slide():
             upload_url = build_url(slide_upload_base_url, str(session['id']), directory, timestamp)
             deepzoom_url = build_url(tiles_base_url, str(slide_id))
             
-            token = sign_token({"slide_id": slide_id, "status": "Ready"}, salt="deepzoom_callback")
+            token = sign_token({"slide_id": slide_id, "old_status": "Uploaded", "new_status": "Ready"}, salt="deepzoom_callback")
             callback_url = absolute_url_for(".deepzoom_callback", token=token)
-            print(["--input", upload_url,
-                                  "--output", deepzoom_url,
-                                  "--name", directory,
-                                  "--callback", callback_url])
             run_task("deepzoom", ["--input", upload_url,
                                   "--output", deepzoom_url,
                                   "--name", directory,
+                                  "--quality", "100",
                                   "--callback", callback_url])
             return {}
     
@@ -297,17 +294,15 @@ def new_slide():
 
 @app.signed_route("/slides/callback", max_age=60*60)
 def deepzoom_callback(token):
-    pdb.set_trace()
-    slide_id = token.pop("slide_id", None)
-    status = token.get("status")
-    if slide_id and status:
-        sql = "SELECT id, status FROM slide WHERE id = %(slide_id)s;"
-        with Cursor() as cur:
-            cur.execute(sql)
-            old = dict_from_select(cur, sql, {"slide_id": slide_id})
-            
-            if old:
-                perform_edit(cur, "slide", token, old)
-                return {}
+    with Cursor() as cur:
+        sql = """UPDATE slide SET status = %(new_status)s
+                 WHERE id = %(slide_id)s AND status = %(old_status)s;"""
+        cur.execute(sql, token)
+        
+        sql = """INSERT INTO editrecord (tablename, row_id, action, details)
+                 VALUES ('slide', %(row_id)s, 'Edited', %(details)s);"""
+        cur.execute(sql, {"row_id": token["slide_id"], "details": {"Status": token["new_status"]}})
+    
+    return {}
 
 
