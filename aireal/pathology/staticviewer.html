@@ -33,7 +33,7 @@
                 showRotationControl: true,
                 showNavigator: true,
                 prefixUrl: "icons/",
-                tileSources: url.searchParams.get("dzi_url"),
+                tileSources: params.get("dzi_url"),
                 });
             
             const exitButton = new OpenSeadragon.Button({
@@ -43,7 +43,7 @@
                 srcHover: "icons/exit_hover.png",
                 srcDown: "icons/exit_pressed.png",
                 });
-            exitButton.addHandler("click", function() {window.location.replace(document.referrer);});
+            exitButton.addHandler("click", function() {window.location.replace(params.get("back_url"));});
 
             viewer.buttons.buttons.push(exitButton);
             viewer.buttons.element.appendChild(exitButton.element);

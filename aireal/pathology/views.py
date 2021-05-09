@@ -112,9 +112,9 @@ def view_slide(slide_id):
         tiles_cdn_base_url= tiles_cdn_base_url[:-1]
     
     dzi_url = build_url(tiles_cdn_base_url, str(slide_id), quote(f"{directory_name}.dzi"))
-    viewer_url = build_url(tiles_cdn_base_url, "staticviewer.html", dzi_url=dzi_url)
+    viewer_url = build_url(tiles_cdn_base_url, "staticviewer.html", dzi_url=dzi_url, back_url=url_for(".slide_list"))
     return redirect(viewer_url)#cloudfront_sign_url(viewer_url, private_key))
-    return render_template("viewer.html", dzi_url=dzi_url, name=name, url_back=url_for(".slide_list"))
+    return render_template("viewer.html", dzi_url=dzi_url, name=name)
 
 
 
