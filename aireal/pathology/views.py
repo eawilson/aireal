@@ -7,14 +7,12 @@ import pdb
 
 from psycopg2.errors import UniqueViolation
 
-from itsdangerous import URLSafeTimedSerializer
-
 from flask import session, redirect, url_for, request, current_app
 from werkzeug import exceptions
 
 from urllib.parse import quote
 
-from ..utils import Cursor, Transaction, navbar, abort, tablerow, render_page, render_template, unique_key, dict_from_select, Blueprint, validate_token, absolute_url_for, build_url
+from ..utils import Cursor, Transaction, navbar, abort, tablerow, render_page, render_template, unique_key, dict_from_select, Blueprint, sign_token, absolute_url_for, build_url, 
 from ..wrappers import Local
 from ..logic import perform_edit, perform_delete, perform_restore
 from ..view_helpers import log_table
@@ -112,7 +110,8 @@ def view_slide(slide_id):
         tiles_cdn_base_url= tiles_cdn_base_url[:-1]
     
     dzi_url = build_url(tiles_cdn_base_url, str(slide_id), quote(f"{directory_name}.dzi"))
-    viewer_url = build_url(tiles_cdn_base_url, "staticviewer.html", dzi_url=dzi_url, back_url=url_for(".slide_list"))
+    viewer_url = build_url(tiles_cdn_base_url, "staticviewer.html", dzi_url=dzi_url, back_url=absolute_url_for(".slide_list"))
+    print(viewer_url)
     return redirect(viewer_url)#cloudfront_sign_url(viewer_url, private_key))
     return render_template("viewer.html", dzi_url=dzi_url, name=name)
 
@@ -275,8 +274,7 @@ def new_slide():
             upload_url = build_url(slide_upload_base_url, str(session['id']), directory, timestamp)
             deepzoom_url = build_url(tiles_base_url, str(slide_id))
             
-            serializer = URLSafeTimedSerializer(config['SECRET_KEY'], salt="deepzoom_callback")
-            token = serializer.dumps({"slide_id": slide_id, "status": "Ready"})
+            token = sign_token({"slide_id": slide_id, "status": "Ready"}, salt="deepzoom_callback")
             callback_url = absolute_url_for(".deepzoom_callback", token=token)
             print(["--input", upload_url,
                                   "--output", deepzoom_url,
@@ -298,10 +296,10 @@ def new_slide():
 
 
 @app.signed_route("/slides/callback", max_age=60*60)
-def deepzoom_callback():
-    payload = validate_token(token)
-    slide_id = payload.pop("slide_id", None)
-    status = payload.get("status")
+def deepzoom_callback(token):
+    pdb.set_trace()
+    slide_id = token.pop("slide_id", None)
+    status = token.get("status")
     if slide_id and status:
         sql = "SELECT id, status FROM slide WHERE id = %(slide_id)s;"
         with Cursor() as cur:
@@ -309,7 +307,7 @@ def deepzoom_callback():
             old = dict_from_select(cur, sql, {"slide_id": slide_id})
             
             if old:
-                perform_edit(cur, "slide", payload, old)
+                perform_edit(cur, "slide", token, old)
                 return {}
 
 

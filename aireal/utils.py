@@ -23,10 +23,10 @@ from .i18n import _
 from .forms import ActionForm
 
 __all__ = ["Blueprint",
-           "validate_token",
            "utcnow",
            "build_url"
            "local_subnet",
+           "sign_token",
            "abort",
            "tablerow",
            "render_template",
@@ -42,6 +42,12 @@ _navbars = {}
     #import inspect
     #for frame in inspect.stack():
         #print(frame[0].f_locals.get("allowed", "."))
+
+
+
+def sign_token(data, salt):
+    serializer = URLSafeTimedSerializer(current_app.config['SECRET_KEY'], salt=salt)
+    return serializer.dumps(data)
 
 
 
@@ -153,7 +159,7 @@ class Blueprint(flask.Blueprint):
         return decorator
     
     
-    def signed_route(self, rule, max_age=0, **options):
+    def signed_route(self, rule, max_age, salt=None, **options):
         """ Wrapper arounf Blueprint route with the additional keyword
             argument max_age. This is the maximum allowed age of the signature
             in seconds. Access to the route is alowed if the user is logged in
@@ -169,7 +175,7 @@ class Blueprint(flask.Blueprint):
             as determined by the absence of a User-agent header.
             
         """
-
+        
         def decorator(function):
             """ Check if the function has already been registered and therefore
                 already wrapped. If so then just return it unmodified. WARNING
@@ -193,9 +199,11 @@ class Blueprint(flask.Blueprint):
             else:
                 @wraps(function)
                 def wrapper(*args, **kwargs):
-                    token = {**request.view_args, **request.args}.get("token")
-                    if (token and validate_token(token, max_age)) or "id" in session:
-                        return function(*args, **kwargs)
+                    token = _validate_token(request.args.get("token"),
+                                            max_age=max_age,
+                                            salt=salt or endpoint)
+                    if token or "id" in session:
+                        return function(token, *args, **kwargs)
                     else:
                         if "User-agent" in request.headers:
                             return redirect(url_for("auth.root"))
@@ -212,13 +220,15 @@ class Blueprint(flask.Blueprint):
 
 
 
-def validate_token(token, max_age):
-    secret = current_app.config["SECRET_KEY"]
-    s = URLSafeTimedSerializer(secret, salt="set_password")
-    try:
-        return s.loads(token, max_age=max_age)
-    except BadSignature:
-        return {}
+def _validate_token(token, max_age, salt=salt):
+    if token:
+        secret = current_app.config["SECRET_KEY"]
+        s = URLSafeTimedSerializer(secret, salt=salt)
+        try:
+            return s.loads(token, max_age=max_age)
+        except BadSignature:
+            pass
+    return {}
 
 
 

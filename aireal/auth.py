@@ -28,7 +28,6 @@ from werkzeug.exceptions import (Conflict,
                                  InternalServerError)
 
 from passlib.hash import bcrypt_sha256
-from itsdangerous import URLSafeTimedSerializer
 
 from .forms import (LoginForm,
                    ChangePasswordForm,
@@ -36,12 +35,12 @@ from .forms import (LoginForm,
 from .utils import (Transaction,
                     Cursor,
                     Blueprint,
+                    sign_token,
                     render_template,
                     render_page,
                     abort,
                     _navbars,
-                    original_referrer,
-                    validate_token)
+                    original_referrer)
 from .aws import sendmail
 from .i18n import _, locale_from_headers
 
@@ -75,28 +74,6 @@ def update_last_session(cur, **kwargs):
                  SET last_session = %(last_session)s
                  WHERE id = %(users_id)s;"""
         cur.execute(sql, {"users_id": users_id, "last_session": new_session})
-
-
-
-#def token_required(function):
-    #@wraps(function)
-    #def wrapper(*args, **kwargs):
-        #token = {**request.view_args, **request.args}.get("token")
-        #if (token and validate_token(token)) or "id" in session:
-            #return function(*args, **kwargs)
-        #else:
-            #return redirect(url_for("auth.root"))
-    #return wrapper
-
-
-
-#def validate_token(token):
-    #secret = current_app.config["SECRET_KEY"]
-    #s = URLSafeTimedSerializer(secret, salt="set_password")
-    #try:
-        #return s.loads(token, max_age=60*60*24*7)
-    #except BadSignature:
-        #return {}
 
 
 
@@ -362,11 +339,10 @@ def change_password():
 
 
 
-@app.signed_route("/setpassword/<string:token>", methods=["GET", "POST"], max_age=60*60*24*7)
+@app.signed_route("/setpassword", methods=["GET", "POST"], max_age=60*60*24*7)
 def set_password(token):
-    payload = validate_token(token, max_age=60*60*24*7)
-    reset_datetime = payload.get("reset_datetime", datetime.now(tz=timezone.utc))
-    email = payload.get("email", "")
+    reset_datetime = token.get("reset_datetime", datetime.now(tz=timezone.utc))
+    email = token.get("email", "")
     
     with Cursor() as cur:
         sql = """SELECT id, totp_secret
@@ -407,13 +383,11 @@ def send_setpassword_email(cur, email):
              WHERE users.email = %(email)s;"""
     cur.execute(sql, {"reset_datetime": reset_datetime, "email": email})
     if cur.rowcount:
-        config = current_app.config
-        serializer = URLSafeTimedSerializer(config['SECRET_KEY'], salt="set_password")
-        token = serializer.dumps({"email": email, "reset_datetime": reset_datetime})
+        token = sign_token({"email": email, "reset_datetime": reset_datetime}, salt="set_password")
         path = url_for("auth.set_password", token=token)
         host = dict(request.headers)["Host"]
         link = f"http://{host}{path}"
-        name = config.get("NAME", "<APP>")
+        name = current_app.config.get("NAME", "<APP>")
         body = _("Please follow {} to reset your {} password. This link can only be used once and will expire in 7 days.").format(link, name)
         subject = _("{} Password Link").format(name)
         if email != "someone@example.com":
@@ -422,8 +396,8 @@ def send_setpassword_email(cur, email):
             print(link)
 
 
-@app.signed_route("/qrcode/<string:email>/<string:secret>", max_age=60*60*24*7)
-def qrcode(email, secret):
+@app.signed_route("/qrcode/<string:email>/<string:secret>", salt="set_password", max_age=60*60*24*7)
+def qrcode(token, email, secret):
     
     service = quote(current_app.config.get("NAME", "<APP>"))
     email = quote(email)
@@ -443,8 +417,8 @@ def qrcode(email, secret):
 
 
 
-@app.signed_route("/twofactor", methods=["GET", "POST"], max_age=60*60*24*7)
-def twofactor():
+@app.signed_route("/twofactor", methods=["GET", "POST"], salt="set_password", max_age=60*60*24*7)
+def twofactor(token):
     referrer = request.args.get("referrer2") or request.referrer
     token = request.args.get("token", "")
     with Transaction() as trans:
@@ -459,12 +433,11 @@ def twofactor():
                 destination = referrer
                 
             else:
-                payload = validate_token(token, max_age=60*60*24*7)
-                email = payload.get("email")
+                email = token.get("email")
                 sql = """SELECT id
                          FROM users
                          WHERE email = %(email)s AND reset_datetime = %(reset_datetime)s;"""
-                cur.execute(sql, {"email": email, "reset_datetime": payload.get("reset_datetime", datetime.now(tz=timezone.utc))})
+                cur.execute(sql, {"email": email, "reset_datetime": token.get("reset_datetime", datetime.now(tz=timezone.utc))})
                 users_id = (cur.fetchone() or (0,))[0]
                 destination = url_for(".login")
             
