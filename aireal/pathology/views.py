@@ -3,7 +3,6 @@ from itertools import count
 import re
 import time
 import json
-from urllib.parse import urlparse, urlunparse, urlencode
 import pdb
 
 from psycopg2.errors import UniqueViolation
@@ -13,7 +12,9 @@ from itsdangerous import URLSafeTimedSerializer
 from flask import session, redirect, url_for, request, current_app
 from werkzeug import exceptions
 
-from ..utils import Cursor, Transaction, navbar, abort, tablerow, render_page, render_template, unique_key, dict_from_select, Blueprint, validate_token, absolute_url_for
+from urllib.parse import quote
+
+from ..utils import Cursor, Transaction, navbar, abort, tablerow, render_page, render_template, unique_key, dict_from_select, Blueprint, validate_token, absolute_url_for, build_url
 from ..wrappers import Local
 from ..logic import perform_edit, perform_delete, perform_restore
 from ..view_helpers import log_table
@@ -32,32 +33,27 @@ app = Blueprint("pathology", __name__, "Pathology", template_folder="templates")
 def pathology_navbar():
     return [{"text": _("Slides"),
              "href":  url_for("pathology.slide_list")}]
-
-
-
-@app.insecure_route("/zz")
-def zz():
-    return(render_page("set_cookie3.html"))
     
 
 
 @app.route("/slides")
 def slide_list():
-    sql = """SELECT slide.id, slide.name, users.fullname, pathologysite.name, slide.created_datetime, slide.status, slide.deleted
+    sql = """SELECT slide.id, slide.name, users.fullname, pathologysite.name, slide.created_datetime, slide.status, slide.deleted, slide.clinical_details
              FROM slide
              INNER JOIN users ON users.id = slide.users_id
              LEFT OUTER JOIN pathologysite ON pathologysite.id = slide.pathologysite_id
              ORDER BY slide.name;"""
 
-    head=(_("Slide"), _("Site"), _("Uploaded By"), _("Date Uploaded"), _("Status"))
+    head=(_("Slide"), _("Site"), _("Uploaded By"), _("Date Uploaded"), _("Clinical Details"), _("Status"))
     body = []
     with Cursor() as cur:
         cur.execute(sql, {"project_id": session.get("project_id")})
-        for slide_id, slide, user, pathologysite, created_datetime, status, deleted in cur:
+        for slide_id, slide, user, pathologysite, created_datetime, status, deleted, clinical_details in cur:
             body.append(tablerow(slide,
                                  pathologysite,
                                  user,
                                  Local(created_datetime),
+                                 clinical_details,
                                  status,
                                  deleted=deleted,
                                  id=slide_id))
@@ -77,32 +73,25 @@ def slide_list():
 def auth_slide(slide_id):
     sql = """SELECT slide.name, slide.directory_name, slide.status
              FROM slide
-             INNER JOIN project_users ON slide.project_id = project_users.project_id
-             WHERE slide.id = %(slide_id)s AND slide.deleted = FALSE AND project_users.users_id = %(users_id)s;"""
+             WHERE slide.id = %(slide_id)s AND slide.deleted = FALSE;"""
     with Cursor() as cur:
         cur.execute(sql, {"users_id": session["id"], "slide_id": slide_id})
         name, directory_name, status = cur.fetchone() or abort(exceptions.NotFound)
     
     if False:#status != "Ready":
-        return redirect(request.referrer)####################################################################
+        return redirect(request.referrer)
     
     config = current_app.config
-    tiles_cdn_base_url = config.get("TILES_CDN_BASE_URL") or abort(exceptions.NotImplemented)
-    if not tiles_cdn_base_url.endswith("/"):
-        tiles_cdn_base_url = f"{tiles_cdn_base_url}/"
-    
-    wildcard_url = f"{tiles_cdn_base_url}{slide_id}/*"
     private_key = config.get("TILES_CDN_PRIVATE_KEY") or abort(exceptions.NotImplemented)
+    tiles_cdn_base_url = config.get("TILES_CDN_BASE_URL") or abort(exceptions.NotImplemented)
+    if tiles_cdn_base_url.endswith("/"):
+        tiles_cdn_base_url = tiles_cdn_base_url[:-1]
+    
+    wildcard_url = build_url(tiles_cdn_base_url, "*")
     cookies = cloudfront_sign_cookies(wildcard_url, private_key)
+    destination = absolute_url_for(".view_slide", slide_id=slide_id)
     
-    set_cookies_url = f"{tiles_cdn_base_url}set_cookie.html"
-    set_cookies_url = url_for(".zz")
-    url_parts = list(urlparse(set_cookies_url))
-    destination = request.host_url.rstrip("/")+url_for(".view_slide", slide_id=slide_id)
-    params = {"cookies": cookies, "destination": destination}
-    url_parts[4] = urlencode(params)
-    set_cookies_url = urlunparse(url_parts)
-    
+    set_cookies_url = build_url(tiles_cdn_base_url, "set_cookies.html", cookies=cookies, destination=destination)
     return redirect(cloudfront_sign_url(set_cookies_url, private_key))
 
 
@@ -111,18 +100,20 @@ def auth_slide(slide_id):
 def view_slide(slide_id):
     sql = """SELECT slide.name, slide.directory_name, slide.status
              FROM slide
-             INNER JOIN project_users ON slide.project_id = project_users.project_id
-             WHERE slide.id = %(slide_id)s AND slide.deleted = FALSE AND project_users.users_id = %(users_id)s;"""#AND slide.status = 'Ready'
+             WHERE slide.id = %(slide_id)s AND slide.deleted = FALSE;"""#AND slide.status = 'Ready'
     with Cursor() as cur:
         cur.execute(sql, {"users_id": session["id"], "slide_id": slide_id})
         name, directory_name, status = cur.fetchone() or abort(exceptions.NotFound)
     
     config = current_app.config
+    private_key = config.get("TILES_CDN_PRIVATE_KEY") or abort(exceptions.NotImplemented)
     tiles_cdn_base_url = config.get("TILES_CDN_BASE_URL") or abort(exceptions.NotImplemented)
-    if not tiles_cdn_base_url.endswith("/"):
-        tiles_cdn_base_url= f"{tiles_cdn_base_url}/"
+    if tiles_cdn_base_url.endswith("/"):
+        tiles_cdn_base_url= tiles_cdn_base_url[:-1]
     
-    dzi_url = f"{tiles_cdn_base_url}{slide_id}/{directory_name}/{directory_name}.dzi"
+    dzi_url = build_url(tiles_cdn_base_url, str(slide_id), quote(f"{directory_name}.dzi"))
+    viewer_url = build_url(tiles_cdn_base_url, "staticviewer.html", dzi_url=dzi_url)
+    return redirect(viewer_url)#cloudfront_sign_url(viewer_url, private_key))
     return render_template("viewer.html", dzi_url=dzi_url, name=name, url_back=url_for(".slide_list"))
 
 
@@ -130,10 +121,9 @@ def view_slide(slide_id):
 @app.route("/slides/<int:slide_id>/edit", methods=["GET", "POST"])
 def edit_slide(slide_id):
     with Cursor() as cur:
-        sql = """SELECT slide.id, slide.name, slide.clinical_details_id, slide.project_id, slide.deleted
+        sql = """SELECT slide.id, slide.name, slide.clinical_details, slide.pathologysite_id, slide.deleted
                  FROM slide
-                 INNER JOIN project_users ON slide.project_id = project_users.project_id
-                 WHERE slide.id = %(slide_id)s AND project_users.users_id = %(users_id)s;"""
+                 WHERE slide.id = %(slide_id)s;"""
         old = dict_from_select(cur, sql, {"users_id": session["id"], "slide_id": slide_id}) or abort(exceptions.NotFound)
         
         form = ActionForm(request.form)
@@ -152,17 +142,8 @@ def edit_slide(slide_id):
         cur.execute(sql, {"pathologysite_id": old["pathologysite_id"]})
         pathologysite_id_choices = list(cur)
         
-        sql = """SELECT project.id, project.name
-                 FROM project
-                 INNER JOIN project_users ON project_users.project_id = project.id AND project_users.users_id = %(users_id)s
-                 WHERE project.deleted = FALSE OR project.id = %(project_id)s
-                 ORDER BY project.name;"""
-        cur.execute(sql, {"project_id": old["project_id"], "users_id": session["id"]})
-        project_id_choices = list(cur)
-        
         form = SlideForm(request.form if request.method=="POST" else old)
         form.pathologysite_id.choices = pathologysite_id_choices
-        form.project_id.choices = project_id_choices
 
         if request.method == "POST" and form.validate():
             try:
@@ -183,8 +164,7 @@ def view_log(slide_id):
     with Cursor() as cur:
         sql = """SELECT id
                  FROM slide
-                 INNER JOIN project_users ON slide.project_id = project_users.project_id
-                 WHERE slide.id = %(slide_id)s AND project_users.users_id = %(users_id)s;"""
+                 WHERE slide.id = %(slide_id)s;"""
         cur.execute(sql, {"users_id": session["id"], "slide_id": slide_id})
         cur.fetchone() or abort(exceptions.NotFound)
         
@@ -202,8 +182,8 @@ def new_slide():
         slide_upload_base_url = config.get("SLIDE_UPLOAD_BASE_URL", "")
         if not slide_upload_base_url[:5].lower() == "s3://":
             abort(exceptions.NotImplemented)
-        if not slide_upload_base_url.endswith("/"):
-            slide_upload_base_url= f"{slide_upload_base_url}/"
+        if slide_upload_base_url.endswith("/"):
+            slide_upload_base_url= slide_upload_base_url[:-1]
         upload_bucket, prefix = slide_upload_base_url[5:].split("/", maxsplit=1)
 
         form = AjaxForm(request.form)
@@ -220,7 +200,7 @@ def new_slide():
                 directory, filename = path.split("/", maxsplit=1)
             except ValueError:
                 return ({}, exceptions.BadRequest.code)
-            prefix = f"{prefix}{session['id']}/{directory}/"
+            prefix = f"{prefix}/{session['id']}/{directory}/"
             timestamp = form.timestamp.data
             
             if not timestamp.isnumeric():
@@ -254,69 +234,54 @@ def new_slide():
             return {"outcome": "required", "signedUrl": signed_url, "timeStamp": timestamp}
 
     
-    #with Transaction() as trans:
-        #with trans.cursor() as cur:
-            #sql = """SELECT pathologysite.id, pathologysite.name
-                        #FROM pathologysite
-                        #WHERE pathologysite.deleted = FALSE
-                        #ORDER BY pathologysite.name;"""
-            #cur.execute(sql)
-            #pathologysite_id_choices = list(cur)
-            
-            #sql = """SELECT project.id, project.name
-                        #FROM project
-                        #INNER JOIN project_users ON project_users.project_id = project.id AND project_users.users_id = %(users_id)s
-                        #WHERE project.deleted = FALSE
-                        #ORDER BY project.name;"""
-            #cur.execute(sql, {"users_id": session["id"]})
-            #project_id_choices = list(cur)
-            
-            #form = CompletionForm(request.form) if request.method == "POST" else DirectoryUploadForm(id="directory-upload-form")
-            #form.project_id.choices = project_id_choices
-            #form.pathologysite_id.choices = pathologysite_id_choices
-            
         form = CompletionForm(request.form)
         if form.validate():
             tiles_base_url = config.get("TILES_BASE_URL", "")
             if not tiles_base_url[:5].lower() == "s3://":
                 abort(exceptions.NotImplemented)
-            if not tiles_base_url.endswith("/"):
-                tiles_base_url= f"{tiles_base_url}/"
+            if tiles_base_url.endswith("/"):
+                tiles_base_url= tiles_base_url[:-1]
             
             directory = form.directory.data
             timestamp = form.timestamp.data
             
             new = {"name": directory,
-                #"project_id": form.project_id.data,
                 "directory_name": directory,
                 "user_directory_timestamp": f"{session['id']}/{directory}/{timestamp}",
-                #"pathologysite_id": form.pathologysite_id.data,
                 "users_id": session["id"],
                 "clinical_details": "",
                 "status": "Uploaded"}
-            #project_id_choices = ((form.project_id.data, form.project_id.data),)
-            #pathologysite_id_choices = ((form.pathologysite_id.data, form.pathologysite_id.data),)
+            
+            slide_id = None
             with Transaction() as trans:
                 with trans.cursor() as cur:
                     for suffix in count():
                         new["name"] = f"{directory} ({suffix})" if suffix else directory
                         try:
                             slide_id = perform_edit(cur, "slide", new, {})
-                                            #project_id=project_id_choices,
-                                            #pathologysite_id=pathologysite_id_choices)
                         except UniqueViolation as e: #
                             trans.rollback()
+                            if "user_directory_timestamp" in str(e):
+                                break
                             continue
                         trans.commit()
                         break
+
+                    if slide_id is None:
+                        sql = "SELECT id FROM slide WHERE user_directory_timestamp = %(udt)s;"
+                        cur.execute(sql, {"udt": new["user_directory_timestamp"]})
+                        slide_id = cur.fetchone()[0]
                 
-            upload_url = f"s{slide_upload_base_url}{session['id']}/{directory}/{timestamp}"
-            deepzoom_url = f"{tiles_base_url}{slide_id}"
+            upload_url = build_url(slide_upload_base_url, str(session['id']), directory, timestamp)
+            deepzoom_url = build_url(tiles_base_url, str(slide_id))
             
             serializer = URLSafeTimedSerializer(config['SECRET_KEY'], salt="deepzoom_callback")
             token = serializer.dumps({"slide_id": slide_id, "status": "Ready"})
-            callback_url = request.host_url + url_for(".deepzoom_callback", token=token)
-                        
+            callback_url = absolute_url_for(".deepzoom_callback", token=token)
+            print(["--input", upload_url,
+                                  "--output", deepzoom_url,
+                                  "--name", directory,
+                                  "--callback", callback_url])
             run_task("deepzoom", ["--input", upload_url,
                                   "--output", deepzoom_url,
                                   "--name", directory,

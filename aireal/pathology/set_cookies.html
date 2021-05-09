@@ -9,11 +9,10 @@
             const params = url.searchParams;
             const cookies = JSON.parse(params.get("cookies"));
             for(const key in cookies) {
-                var cookie = key+"="+encodeURIComponent(cookies[key])+"; samesite=lax";
-                console.log(cookie);
+                var cookie = key+"="+encodeURIComponent(cookies[key])+"; SameSite=None; Secure";
                 document.cookie = cookie;
                 }
-            //window.location.replace(params.get("destination"));
+            window.location.replace(params.get("destination"));
         </script>
     </body>
 </html>

@@ -192,7 +192,6 @@ def run_task(task, command):
     """
     client = boto3.client("ecs")
     subnet = current_app.config["AWS_SUBNET"]
-    container = task
     
     for tries in (0, 1):
         if task in task_definitions:
@@ -207,7 +206,7 @@ def run_task(task, command):
                     },
                 overrides = {
                     "containerOverrides": [{
-                            "name": container,
+                            "name": task,
                             "command": command,
                             }],
                     "taskRoleArn": "arn:aws:iam::387676495311:role/Deepzoom",

@@ -364,7 +364,7 @@ def change_password():
 
 @app.signed_route("/setpassword/<string:token>", methods=["GET", "POST"], max_age=60*60*24*7)
 def set_password(token):
-    payload = validate_token(token)
+    payload = validate_token(token, max_age=60*60*24*7)
     reset_datetime = payload.get("reset_datetime", datetime.now(tz=timezone.utc))
     email = payload.get("email", "")
     
@@ -459,7 +459,7 @@ def twofactor():
                 destination = referrer
                 
             else:
-                payload = validate_token(token)
+                payload = validate_token(token, max_age=60*60*24*7)
                 email = payload.get("email")
                 sql = """SELECT id
                          FROM users

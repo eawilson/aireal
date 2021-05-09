@@ -2,7 +2,7 @@ from ..forms import (Form,
                     TextInput,
                     DirectoryInput,
                     SelectInput)
-from ..i18n import _
+from ..i18n import __ as _
 
 
 
@@ -35,4 +35,4 @@ class SlideForm(Form):
     def definition(self):
         self.name = TextInput(_("Name"))
         self.pathologysite_id = SelectInput(_("Site"))
-        self.project_id = SelectInput(_("Site"))
+        self.clinical_details = TextInput(_("Clinical Details"))

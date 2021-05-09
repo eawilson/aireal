@@ -4,7 +4,7 @@ import time
 from functools import wraps
 from collections import defaultdict
 from ipaddress import ip_address, ip_network
-from urllib.parse import urlparse, parse_qs, unquote_plus
+from urllib.parse import urlparse, urlunparse, parse_qs, unquote_plus, urlencode
 
 from dateutil import parser
 import pytz
@@ -25,6 +25,7 @@ from .forms import ActionForm
 __all__ = ["Blueprint",
            "validate_token",
            "utcnow",
+           "build_url"
            "local_subnet",
            "abort",
            "tablerow",
@@ -44,8 +45,18 @@ _navbars = {}
 
 
 
+def build_url(*path, **params):
+    url = "/".join(path)
+    if params:
+        url_parts = list(urlparse(url))
+        url_parts[4] = urlencode(params)
+        url = urlunparse(url_parts)
+    return url
+
+
+
 def absolute_url_for(*args, **kwargs):
-    return request.host_url + url_for(*args, **kwargs)
+    return request.host_url[:-1] + url_for(*args, **kwargs)
 
 
 
