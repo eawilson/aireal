@@ -243,13 +243,15 @@ def new_slide():
             
             directory = form.directory.data
             timestamp = form.timestamp.data
+            sql = """INSERT INTO slide (name, directory_name, user_directory_timestamp, users_id, status)
+                      VALUES (%(name)s, %(directory_name)s, %(user_directory_timestamp)s, %(users_id)s, 'Uploaded')
+                      RETURNING id;"""
             
             new = {"name": directory,
-                "directory_name": directory,
-                "user_directory_timestamp": f"{session['id']}/{directory}/{timestamp}",
-                "users_id": session["id"],
-                "clinical_details": "",
-                "status": "Uploaded"}
+                   "directory_name": directory,
+                   "user_directory_timestamp": f"{session['id']}/{directory}/{timestamp}",
+                   "users_id": session["id"],
+                   "status": "Uploaded"}
             
             slide_id = None
             with Transaction() as trans:
@@ -257,7 +259,13 @@ def new_slide():
                     for suffix in count():
                         new["name"] = f"{directory} ({suffix})" if suffix else directory
                         try:
-                            slide_id = perform_edit(cur, "slide", new, {})
+                            cur.execute(sql, new)
+                            slide_id = cur.fetchone()[0]
+                            
+                            sql = """INSERT INTO editrecord (tablename, row_id, action, details, users_id, ip_address)
+                                     VALUES ('slide', %(row_id)s, 'Uploaded', %(details)s, %(users_id)s, %(ip_address)s);"""
+                            cur.execute(sql, {"row_id": slide_id, "details": {"Name": directory},"users_id": session["id"], "ip_address": request.remote_addr})
+
                         except UniqueViolation as e: #
                             trans.rollback()
                             if "user_directory_timestamp" in str(e):
@@ -267,8 +275,8 @@ def new_slide():
                         break
 
                     if slide_id is None:
-                        sql = "SELECT id FROM slide WHERE user_directory_timestamp = %(udt)s;"
-                        cur.execute(sql, {"udt": new["user_directory_timestamp"]})
+                        sql = "SELECT id FROM slide WHERE user_directory_timestamp = %(user_directory_timestamp)s;"
+                        cur.execute(sql, {"user_directory_timestamp": new["user_directory_timestamp"]})
                         slide_id = cur.fetchone()[0]
                 
             upload_url = build_url(slide_upload_base_url, str(session['id']), directory, timestamp)
@@ -279,7 +287,6 @@ def new_slide():
             run_task("deepzoom", ["--input", upload_url,
                                   "--output", deepzoom_url,
                                   "--name", directory,
-                                  "--quality", "100",
                                   "--callback", callback_url])
             return {}
     
