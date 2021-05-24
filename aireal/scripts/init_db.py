@@ -21,7 +21,7 @@ def _(text):
 
 
 
-def init_db(command, instance_path):
+def init_db(nstance_path, no_data):
     """ 
     """
     global trans
@@ -61,17 +61,18 @@ def init_db(command, instance_path):
                 cur.executemany(sql, [{"name": name} for name in valid_roles])
                 
                 
-                if command == "init":
-                    email = "someone@example.com"
-                    form = UserForm({"email": email,
-                                     "forename": "Admin",
-                                     "surname": "Admin",
-                                     "role": ["Admin"]})
-                    form.role.choices = (("Admin", "Admin"),)
-                    perform_edit(cur, "users", form.data, form=form)
-                    send_setpassword_email(cur, email)
-
+                if no_data:
+                    return
                 
+                email = "someone@example.com"
+                form = UserForm({"email": email,
+                                    "forename": "Admin",
+                                    "surname": "Admin",
+                                    "role": ["Admin"]})
+                form.role.choices = (("Admin", "Admin"),)
+                perform_edit(cur, "users", form.data, form=form)
+                send_setpassword_email(cur, email)
+
                 new_type = partial(upsert, "locationtype", pk="name")
                 root = new_type("Home", movable="inbuilt")
                 site = new_type(_("Site"), movable="fixed")
@@ -138,15 +139,12 @@ def can_contain(parent, children):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("command")    
-    parser.add_argument("path", nargs="?", default=".")    
+    parser.add_argument("path", nargs="?", help="path to instance folder containing config file with database connection uri.", default=".")    
+    parser.add_argument("-n", "--no-data", action="store_const", help="database will be initialised after creation unless passed the --no-data arguent", const=True, default=False)    
     args = parser.parse_args()
     
-    if args.command not in ("init", "update"):
-        sys.exit(f"{args.command} is not a recognised command")
-        
     try:
-        init_db(args.command, args.path)
+        init_db(args.path, args.no_data)
     except OSError as e:
         # File input/output error. This is not an unexpected error so just
         # print and exit rather than displaying a full stack trace.

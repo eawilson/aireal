@@ -26,7 +26,7 @@ http {
         listen 80;
         server_name $DOMAIN;
 
-        return 301 https://www.$DOMAIN/\$request_uri;
+        return 301 http://www.$DOMAIN/\$request_uri;
         }
 
     server {
@@ -45,7 +45,7 @@ http {
         ssl_certificate      /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
         ssl_certificate_key  /etc/letsencrypt/live/$DOMAIN/privkey.pem;
 
-        return 301 https://lab.$DOMAIN/\$request_uri;
+        return 301 https://www.$DOMAIN/\$request_uri;
         }
         
     server {
@@ -105,20 +105,30 @@ sudo certbot certonly --dns-route53 -d $DOMAIN -d www.$DOMAIN -d lab.$DOMAIN -i 
 sudo systemctl restart nginx
 
 
+# POSTGRESQL
+sudo apt-get -y install wget ca-certificates gnupg
+sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+sudo apt-get update
+sudo apt-get -y install postgresql-13 postgresql-client-13 postgresql-server-dev-13
+sudo pip3 install psycopg2
 
+sudo systemctl stop postgresql@13-main
 
+VARLIB='/var/lib/postgresql/13/main'
+ETC='/etc/postgresql/13/main'
+sudo -u postgres mv $VARLIB /var/lib/postgresql/13/_main
 
+sudo -u postgres /usr/lib/postgresql/13/bin/initdb -D $VARLIB --wal-segsize=1
+sudo -u postgres sed -i "s|max_wal_size = 1GB|max_wal_size = 64MB|" $ETC/postgresql.conf
+sudo -u postgres sed -i "s|min_wal_size = 80MB|min_wal_size = 5MB|" $ETC/postgresql.conf
 
+sudo systemctl enable postgresql@13-main
+sudo systemctl start postgresql@13-main
 
-
-
-
-
-
-
-
-
-
+sudo -u postgres psql -c 'create database prod;'
+sudo -u postgres psql -c "create user flask;"
+sudo -u postgres psql -c 'grant all privileges on database prod to flask;'
 
 
 
@@ -135,7 +145,7 @@ eval "$(ssh-agent -s)"
 ssh-add ~/.ssh/id_rsa
 cat ~/.ssh/id_rsa.pub
 
-git clone git@github.com:eawilson/aireal.git
+git clone https://github.com/eawilson/aireal.git
 cd aireal
 sudo python3 setup.py develop
 cd ..
