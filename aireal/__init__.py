@@ -43,7 +43,7 @@ def create_app(instance_path="."):
     app.config.from_pyfile(config_file)
     
     app.config.update(ec2_metadata())
-    if "REGION" in app.config:
+    if "AWS_REGION" in app.config:
         os.environ["AWS_DEFAULT_REGION"] = app.config["AWS_REGION"]
     
     register_adapter(dict, Json)
@@ -85,16 +85,12 @@ def create_app(instance_path="."):
 
     from .auth import app as auth
     from .admin import app as admin
-    #from .basespace import app as basespace
-    #from .nanopore import app as nanopore
     from .bioinformatics import app as bioinformatics
     from .pathology import app as pathology
     from .reception import app as reception
     
     app.register_blueprint(auth)
     app.register_blueprint(admin)
-    #app.register_blueprint(basespace)
-    #app.register_blueprint(nanopore)
     app.register_blueprint(bioinformatics)
     app.register_blueprint(pathology)
     app.register_blueprint(reception)

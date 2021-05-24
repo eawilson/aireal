@@ -1,12 +1,14 @@
 import argparse
 import os
 import sys
+import pdb
 from functools import partial
 
 from psycopg2 import IntegrityError
 
 import aireal
-from aireal.utils import Blueprint, Transaction
+from aireal.flask import valid_roles
+from aireal.utils import Transaction
 from aireal.auth import send_setpassword_email
 from aireal.admin.forms import UserForm
 from aireal.logic import perform_edit
@@ -56,7 +58,7 @@ def init_db(command, instance_path):
     
 
                 sql = "INSERT INTO role (name) VALUES (%(name)s) ON CONFLICT DO NOTHING;"
-                cur.executemany(sql, [{"name": name} for name in Blueprint.valid_roles])
+                cur.executemany(sql, [{"name": name} for name in valid_roles])
                 
                 
                 if command == "init":
@@ -100,6 +102,7 @@ def init_db(command, instance_path):
                 
                 root_model = upsert("locationmodel", _("Home"), locationtype=root, movable="inbuilt")
                 site_model = upsert("locationmodel", _("Site"), locationtype=site, movable="fixed")
+                site_model = upsert("locationmodel", _("Room"), locationtype=room, movable="fixed")
                 building_model = upsert("locationmodel", _("Building"), locationtype=building, movable="fixed")
 
                 upsert("location", _("Home"), locationmodel_id=root_model, movable="inbuilt")

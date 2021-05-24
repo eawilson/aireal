@@ -1,15 +1,16 @@
 from flask import url_for
 
-from ..utils import Blueprint, navbar, tablerow, render_page
+from ..flask import Blueprint, render_page
+from ..utils import tablerow
 from ..i18n import _
 
-app = Blueprint("admin", __name__, "Admin")
 
 
-@navbar("Admin")
 def admin_navbar():
-    return [{"text": _("Users"), "href":  url_for("admin.list_users")},
-            {"text": _("Edit"), "href":  url_for("admin.editmenu")}]
+    return [{"text": _("Users"), "href":  url_for("Admin.list_users")},
+            {"text": _("Edit"), "href":  url_for("Admin.editmenu")}]
+
+app = Blueprint("Admin", __name__, navbar=admin_navbar)
 
 
 

@@ -2,23 +2,23 @@ from datetime import datetime, timezone
 
 from flask import url_for
 
-from ..utils import Blueprint, navbar, tablerow, render_page, Transaction
+from ..utils import tablerow, Transaction
+from ..flask import Blueprint, render_page
 from ..i18n import _
 
 
 
-
-app = Blueprint("reception", __name__, "Reception")
-
-
-@navbar("Reception")
 def reception_navbar():
     return [{"text": _("Collections"), "href":  url_for("reception.collection_list")}]
+
+
+app = Blueprint("Reception", __name__, navbar=reception_navbar)
 
 
 
 @app.route("/collections")
 def collection_list():
+    return 
     now = utcnow()
     today = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
     filters = [collection.c.received_datetime >= today]

@@ -12,7 +12,8 @@ from werkzeug import exceptions
 
 from urllib.parse import quote
 
-from ..utils import Cursor, Transaction, navbar, abort, tablerow, render_page, render_template, unique_key, dict_from_select, Blueprint, sign_token, absolute_url_for, build_url
+from ..utils import Cursor, Transaction, tablerow, unique_key, dict_from_select
+from ..flask import abort, render_template, Blueprint, sign_token, absolute_url_for, build_url, render_page
 from ..wrappers import Local
 from ..logic import perform_edit, perform_delete, perform_restore
 from ..view_helpers import log_table
@@ -23,15 +24,15 @@ from ..forms import ActionForm
 from .forms import DirectoryUploadForm, AjaxForm, Form, CompletionForm, SlideForm
 
 
-app = Blueprint("pathology", __name__, "Pathology", template_folder="templates")
 
-
-
-@navbar("Pathology")
 def pathology_navbar():
     return [{"text": _("Slides"),
-             "href":  url_for("pathology.slide_list")}]
-    
+             "href":  url_for("Pathology.slide_list")}]
+  
+
+
+app = Blueprint("Pathology", __name__, navbar=pathology_navbar, template_folder="templates")
+  
 
 
 @app.route("/slides")
@@ -72,16 +73,17 @@ def auth_slide(slide_id):
     sql = """SELECT slide.name, slide.directory_name, slide.status
              FROM slide
              WHERE slide.id = %(slide_id)s AND slide.deleted = FALSE AND slide.status = 'Ready';"""
-    with Cursor() as cur:
-        cur.execute(sql, {"users_id": session["id"], "slide_id": slide_id})
-        row = cur.fetchone()
-        if not row:
-            return redirect(url_for(".slide_list"))
-        name, directory_name, status = row
-    
-        sql = """INSERT INTO editrecord (tablename, row_id, action, users_id, ip_address)
-                 VALUES ('slide', %(row_id)s, 'Viewed', %(users_id)s, %(ip_address)s);"""
-        cur.execute(sql, {"row_id": slide_id, "users_id": session["id"], "ip_address": request.remote_addr})
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            cur.execute(sql, {"users_id": session["id"], "slide_id": slide_id})
+            row = cur.fetchone()
+            if not row:
+                return redirect(url_for(".slide_list"))
+            name, directory_name, status = row
+        
+            sql = """INSERT INTO editrecord (tablename, row_id, action, users_id, ip_address)
+                    VALUES ('slide', %(row_id)s, 'Viewed', %(users_id)s, %(ip_address)s);"""
+            cur.execute(sql, {"row_id": slide_id, "users_id": session["id"], "ip_address": request.remote_addr})
     
     config = current_app.config
     private_key = config.get("TILES_CDN_PRIVATE_KEY") or abort(exceptions.NotImplemented)
@@ -123,38 +125,39 @@ def view_slide(slide_id):
 
 @app.route("/slides/<int:slide_id>/edit", methods=["GET", "POST"])
 def edit_slide(slide_id):
-    with Cursor() as cur:
-        sql = """SELECT slide.id, slide.name, slide.clinical_details, slide.pathologysite_id, slide.deleted
-                 FROM slide
-                 WHERE slide.id = %(slide_id)s;"""
-        old = dict_from_select(cur, sql, {"users_id": session["id"], "slide_id": slide_id}) or abort(exceptions.NotFound)
-        
-        form = ActionForm(request.form)
-        if request.method == "POST" and form.validate():
-            action = form.action.data
-            if action == _("Delete"):
-                perform_delete(cur, "slide", slide_id)
-            elif action == _("Restore"):
-                perform_restore(cur, "slide", slide_id)
-            return redirect(url_for(".slide_list"))
-
-        sql = """SELECT pathologysite.id, pathologysite.name
-                 FROM pathologysite
-                 WHERE pathologysite.deleted = FALSE OR id = %(pathologysite_id)s
-                 ORDER BY pathologysite.name;"""
-        cur.execute(sql, {"pathologysite_id": old["pathologysite_id"]})
-        pathologysite_id_choices = list(cur)
-        
-        form = SlideForm(request.form if request.method=="POST" else old)
-        form.pathologysite_id.choices = pathologysite_id_choices
-
-        if request.method == "POST" and form.validate():
-            try:
-                perform_edit(cur, "slide", form.data, old, form)
-            except UniqueViolation as e:
-                form[unique_key(e)].errors = _("Must be unique.")
-            else:
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            sql = """SELECT slide.id, slide.name, slide.clinical_details, slide.pathologysite_id, slide.deleted
+                    FROM slide
+                    WHERE slide.id = %(slide_id)s;"""
+            old = dict_from_select(cur, sql, {"users_id": session["id"], "slide_id": slide_id}) or abort(exceptions.NotFound)
+            
+            form = ActionForm(request.form)
+            if request.method == "POST" and form.validate():
+                action = form.action.data
+                if action == _("Delete"):
+                    perform_delete(cur, "slide", slide_id)
+                elif action == _("Restore"):
+                    perform_restore(cur, "slide", slide_id)
                 return redirect(url_for(".slide_list"))
+
+            sql = """SELECT pathologysite.id, pathologysite.name
+                    FROM pathologysite
+                    WHERE pathologysite.deleted = FALSE OR id = %(pathologysite_id)s
+                    ORDER BY pathologysite.name;"""
+            cur.execute(sql, {"pathologysite_id": old["pathologysite_id"]})
+            pathologysite_id_choices = list(cur)
+            
+            form = SlideForm(request.form if request.method=="POST" else old)
+            form.pathologysite_id.choices = pathologysite_id_choices
+
+            if request.method == "POST" and form.validate():
+                try:
+                    perform_edit(cur, "slide", form.data, old, form)
+                except UniqueViolation as e:
+                    form[unique_key(e)].errors = _("Must be unique.")
+                else:
+                    return redirect(url_for(".slide_list"))
                 
     buttons={"submit": (_("Save"), url_for(".edit_slide", slide_id=slide_id)),
              "back": (_("Cancel"), url_for(".slide_list"))}
@@ -302,17 +305,18 @@ def new_slide():
 
 
 
-@app.signed_route("/slides/callback", max_age=60*60)
-def deepzoom_callback(data):
-    with Cursor() as cur:
-        quality = data.pop("quality", "Default")
-        sql = """UPDATE slide SET status = %(new_status)s
-                 WHERE id = %(slide_id)s AND status = %(old_status)s;"""
-        cur.execute(sql, data)
-        
-        sql = """INSERT INTO editrecord (tablename, row_id, action, details)
-                 VALUES ('slide', %(row_id)s, 'Processed', %(details)s);"""
-        cur.execute(sql, {"row_id": data["slide_id"], "details": {"Quality": quality}})
+@app.route("/slides/callback/<string:token>", signature="deepzoom_callback", max_age=60*60)
+def deepzoom_callback(token):
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            quality = token.pop("quality", "Default")
+            sql = """UPDATE slide SET status = %(new_status)s
+                    WHERE id = %(slide_id)s AND status = %(old_status)s;"""
+            cur.execute(sql, token)
+            
+            sql = """INSERT INTO editrecord (tablename, row_id, action, details)
+                    VALUES ('slide', %(row_id)s, 'Processed', %(details)s);"""
+            cur.execute(sql, {"row_id": token["slide_id"], "details": {"Quality": quality}})
     
     return {}
 

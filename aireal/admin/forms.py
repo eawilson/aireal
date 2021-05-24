@@ -26,9 +26,10 @@ class UserForm(Form):
 
 class LocationForm(Form):
     def definition(self):
-        self.locationmodel_id = SelectInput(_("Type"))
         self.name = TextInput(_("Name"))
         self.barcode = Input(_("Barcode"), required=False)
+        self.locationtype = SelectInput(_("Type"), coerce=str, _class="get-dynamic-fields")
+        self.locationmodel_id = SelectInput(_("Model"))
 
 
 
@@ -45,7 +46,7 @@ class ProjectForm(Form):
 class LocationModelForm(Form):
     def definition(self):
         self.name = TextInput(_("Name"))
-        self.locationtype = SelectInput(_("Type"), coerce=str, _class="get-dynamic-fields", **{"data-target": "placeholder"})
+        self.locationtype = SelectInput(_("Type"), coerce=str, _class="get-dynamic-fields")
         
         self.temperature = IntegerInput(_("Temperature (°C)"))
 

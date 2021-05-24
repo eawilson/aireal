@@ -6,10 +6,11 @@ from psycopg2.errors import UniqueViolation
 from flask import redirect, url_for, request
 from werkzeug import exceptions
 
-from ..utils import Cursor, abort, tablerow, render_page, unique_key, original_referrer
+from ..utils import Cursor, Transaction, tablerow, unique_key, dict_from_select
+from ..flask import original_referrer, abort, render_page, render_template
 from ..forms import ActionForm
 from .views import app
-from .. import logic
+from ..logic import perform_edit, perform_delete, perform_restore
 from ..i18n import __ as _
 from ..view_helpers import log_table
 from .forms import LocationForm, NameBarcodeForm
@@ -19,7 +20,7 @@ from .forms import LocationForm, NameBarcodeForm
 
 @app.route("/locations/<int:location_id>/log")
 def location_log(location_id):
-    with Cursor as cur:
+    with Cursor() as cur:
         table = log_table(cur, "location", location_id)
     
     table["title"] = _("Location Log")
@@ -32,38 +33,32 @@ def location_log(location_id):
 def edit_location(location_id):
     referrer = original_referrer()
     
-    with engine.begin() as conn:
-        if location_id is not None:
-            sql = select([location.c.id, location.c.name, location.c.deleted]). \
-                    where(location.c.id == location_id)
-            old = dict(conn.execute(sql).first() or abort(exceptions.BadRequest))
-        else:
-            old = {}
-        
-        form = ActionForm(request.form)
-        if request.method == "POST" and form.validate():
-            action = form.action.data
-            if action == _("Delete"):
-                logic.edit(conn, location, {"deleted": True}, old)
-            elif action == _("Restore"):
-                logic.edit(conn, location, {"deleted": False}, old)
-            return redirect(referrer)
-        
-        form = NameBarcodeForm(request.form if request.method=="POST" else old)
-
-        if request.method == "POST" and form.validate():
-            new = form.data
-            try:
-                logic.edit(conn, location, new, old)
-            except UniqueViolation as e:
-                form[unique_key(e)].errors = _("Must be unique.")
-            else:
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            sql = "SELECT id, name, barcode deleted FROM location WHERE id = %(location_id)s;"
+            old = dict_from_select(cur, sql, {"location_id": location_id})
+            
+            form = ActionForm(request.form)
+            if request.method == "POST" and form.validate():
+                action = form.action.data
+                if action == _("Delete"):
+                    perform_delete(cur, "location", row_id=location_id)
+                elif action == _("Restore"):
+                    perform_restore(cur, "location", row_id=location_id)
                 return redirect(referrer)
+            
+            form = NameBarcodeForm(request.form if request.method=="POST" else old)
+            if request.method == "POST" and form.validate():
+                try:
+                    perform_edit(cur, "location", form.data, old, form)
+                except UniqueViolation as e:
+                    form[unique_key(e)].errors = _("Must be unique.")
+                else:
+                    return redirect(referrer)
     
-    title = _("Edit Site") if location_id is not None else _("Edit Location")
     buttons={"submit": (_("Save"), url_for(".edit_location", location_id=location_id, referrer=referrer)),
              "back": (_("Cancel"), referrer)}
-    return render_page("form.html", form=form, buttons=buttons, title=title)
+    return render_page("form.html", form=form, buttons=buttons, title=_("Edit Location Model"))
 
 
 
@@ -72,73 +67,90 @@ def new_location(location_id):
     referrer = original_referrer()
     selected_type = request.form.get("locationtype") or request.args.get("locationtype")
     
-    sql = """SELECT parent.name AS parent, childmodel.locationtype, childmodel.id as row_id, childmodel.name AS model
-             FROM location AS parent
-             JOIN locationmodel AS parentmodel ON parent.locationmodel_id = parentmodel.id
-             LEFT OUTER JOIN locationtype_locationtype ON locationtype_locationtype.parent = parentmodel.locationtype
-             LEFT OUTER JOIN locationmodel AS childmodel ON (childmodel.locationtype = locationtype_locationtype.child AND childmodel.movable = 'fixed')
-             WHERE parent.id = %(location_id)s AND parent.deleted = false
-             ORDER BY childmodel.locationtype, childmodel.name;"""
-    
-    with Cursor() as cur:
-        cur.execute(sql, {"location_id": location_id})
-        
-        type_choices = []
-        model_choices = []
-        for title, locationtype, row_id, model in cur:
-            if type_choices and type_choices[-1][0] != locationtype:
-                type_choices.append((locationtype, _(locationtype)))
-            if selected_type == locationtype:
-                model_choices.append(row_id, model)
-
-        form = LocationForm(request.form)
-        form.locationrtype.choices = type_choices
-        
-        if selected_type:
-            form.locationmodel_id.choices = model_choices
-        #else:
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            sql = """SELECT name
+                    FROM location
+                    WHERE id = %(location_id)s AND deleted = false AND movable != 'mobile';"""
+            cur.execute(sql, {"location_id": location_id})
+            row = cur.fetchone()
+            if not row:
+                return redirect(url_for(".location_list"))
+            title = row[0]
             
-        
-        
-        
-        
-        #if request.method == "POST" and form.validate():
-            #new = form.data
-            #new["parent_id"] = parent_id
-            #new["site_id"] = row["parent_site_id"]
-            #try:
-                #location_id = logic.edit(conn, location, new, locationmodel_id_choices=locationmodel_id_choices)
-            #except UniqueViolation as e:
-                #form[unique_key(e)].errors = _("Must be unique.")
-            #else:
-                #if row["parent_site_id"] == 1:
-                    #conn.execute(location.update().where(location.c.id == location_id), {"site_id": location_id})
-                #return redirect(referrer)
+            sql = """SELECT childmodel.id, childmodel.name, childmodel.locationtype, childmodel.component_number, componentmodel.id AS comp_id, componentmodel.locationtype AS comp_type
+                    FROM location AS parent
+                    JOIN locationmodel AS parentmodel ON parent.locationmodel_id = parentmodel.id
+                    JOIN locationtype_locationtype ON locationtype_locationtype.parent = parentmodel.locationtype
+                    JOIN locationmodel AS childmodel ON childmodel.locationtype = locationtype_locationtype.child
+                    LEFT OUTER JOIN locationmodel AS componentmodel ON childmodel.component_id = componentmodel.id
+                    WHERE parent.id = %(location_id)s AND parent.deleted = false AND parent.movable != 'mobile' AND childmodel.movable = 'fixed' AND childmodel.deleted = false
+                    ORDER BY childmodel.locationtype, childmodel.name;"""
+            
+            cur.execute(sql, {"location_id": location_id})
+            type_choices = []
+            model_choices = []
+            components = {}
+            for row_id, model, locationtype, component_number, component_id, componenttype in cur:
+                if not type_choices or type_choices[-1][0] != locationtype:
+                    type_choices.append((locationtype, _(locationtype)))
+                if selected_type == locationtype:
+                    model_choices.append((row_id, model))
+                    if component_number:
+                        components[row_id] = {"id": component_id, "number": component_number, "type": componenttype}
+            
+            form = LocationForm(request.form)
+            form.locationtype.choices = type_choices
+            form.locationmodel_id.choices = model_choices
+            
+            if request.args.get("locationtype"):
+                del form["name"]
+                del form["barcode"]
+                del form["locationtype"]
+                return render_template("formfields.html", form=form)
+            
+            if request.method == "POST" and form.validate():
+                new = form.data
+                new.pop("locationtype")
+                new["parent_id"] = location_id
+                new["movable"] = 'fixed'
+                try:
+                    new_id = perform_edit(cur, "location", new, form=form)
+                except UniqueViolation as e:
+                    form[unique_key(e)].errors = _("Must be unique.")
+                else:
+                    if new["locationmodel_id"] in components:
+                        sql = """INSERT INTO location (name, movable, locationmodel_id, parent_id) 
+                                VALUES (%(name)s, 'inbuilt', %(locationmodel_id)s, %(parent_id)s);"""
+                        component = components[new["locationmodel_id"]]
+                        for number in range(1, component["number"] + 1):
+                            cur.execute(sql, {"name": "{} {}".format(component["type"], number),
+                                            "locationmodel_id": component["id"],
+                                            "parent_id": new_id})
+                    return redirect(referrer)
     
-    #title = _("New Location")
-    #buttons={"submit": (_("Save"), url_for(".new_location", parent_id=parent_id, referrer=referrer)),
-             #"back": (_("Cancel"), url_for(".location_list"))}
-    #return render_page("form.html", form=form, buttons=buttons, title=title)
+    buttons={"submit": (_("Save"), url_for(".new_location", location_id=location_id, referrer=referrer)),
+             "back": (_("Cancel"), referrer)}
+    return render_page("form.html", form=form, buttons=buttons, title=_("New Location"))
 
 
 
 @app.route("/locations", defaults={"location_id": 1})
 @app.route("/locations/<int:location_id>")
 def location_list(location_id):
-    sql = """WITH RECURSIVE child (id, parent_id, name, depth) AS (
-                 SELECT id, parent_id, name, 1
-                 FROM location
-                 WHERE id = %(location_id)s
-             UNION ALL
-                 SELECT l.id, l.parent_id, l.name, child.depth + 1
-                 FROM child, location l
-                 WHERE child.parent_id = l.id AND l.id != l.parent_id
-             )
-             SELECT id, name
-             FROM child
-             ORDER BY depth DESC;"""
-             
     with Cursor() as cur:
+        sql = """WITH RECURSIVE child (id, parent_id, name, depth) AS (
+                     SELECT id, parent_id, name, 1
+                     FROM location
+                     WHERE id = %(location_id)s
+                 UNION ALL
+                     SELECT l.id, l.parent_id, l.name, child.depth + 1
+                     FROM child, location l
+                     WHERE child.parent_id = l.id
+                 )
+                 SELECT id, name
+                 FROM child
+                 ORDER BY depth DESC;"""
         
         breadcrumbs = []
         cur.execute(sql, {"location_id": location_id})
@@ -149,7 +161,7 @@ def location_list(location_id):
                  FROM location AS l
                  JOIN locationmodel AS m ON l.locationmodel_id = m.id
                  LEFT OUTER JOIN position p ON l.position_id = p.id
-                 WHERE l.parent_id = %(location_id)s AND l.id != l.parent_id
+                 WHERE l.parent_id = %(location_id)s AND l.id != l.parent_id AND l.movable = 'fixed'
                  ORDER BY p.id, l.name;"""
         body = []
         cur.execute(sql, {"location_id": location_id})

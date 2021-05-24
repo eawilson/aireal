@@ -151,7 +151,7 @@
         }
     
     
-    document.addEventListener('contextmenu', preventDefault);
+//     document.addEventListener('contextmenu', preventDefault);
     
     const tbodies = document.getElementsByTagName('tbody');
     for(var i = 0; i < tbodies.length; ++i) {

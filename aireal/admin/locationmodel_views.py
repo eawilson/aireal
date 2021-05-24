@@ -5,7 +5,8 @@ from psycopg2.errors import UniqueViolation
 from flask import redirect, url_for, request
 from werkzeug import exceptions
 
-from ..utils import Cursor, Transaction, abort, tablerow, render_page, unique_key, render_template, dict_from_select
+from ..utils import Cursor, Transaction, tablerow, unique_key, dict_from_select
+from ..flask import render_page, render_template, abort
 from ..forms import ActionForm
 from .views import app
 from ..logic import perform_edit, perform_delete, perform_restore
@@ -84,21 +85,21 @@ def new_locationmodel():
                     new["temperature"] = data["temperature"]
 
                 if "shelves" in data and "shelf_width" in data and "shelf_depth" in data:
-                    new["attr"]["component-number"] = data["shelves"]
+                    new["component_number"] = data["shelves"]
                     cur.execute(component_sql, {"name": "{} Shelf".format(data["name"]),
                                                 "locationtype": "Shelf",
                                                 "movable": "inbuilt",
                                                 "attr": {"internal-width": data["shelf_width"],
                                                          "internal-depth": data["shelf_depth"]}})
-                    new["attr"]["component-id"] = cur.fetchone()[0]
+                    new["component_id"] = cur.fetchone()[0]
                 
                 if "trays" in data and "boxes" in data:
-                    new["attr"]["component-number"] = data["trays"]
+                    new["component_number"] = data["trays"]
                     cur.execute(component_sql, {"name": "{} Tray".format(data["name"]),
                                                 "locationtype": "Tray",
                                                 "movable": "inbuilt",
                                                 "attr": {"first-dimension": data["boxes"]}})
-                    new["attr"]["component-id"] = row_id = cur.fetchone()[0]
+                    new["component_id"] = row_id = cur.fetchone()[0]
                     for n in range(1, data["boxes"] + 1):
                         cur.execute(position_sql, {"name": str(n).rjust(2), "row_id": row_id})
 
@@ -136,27 +137,28 @@ def new_locationmodel():
 
 @app.route("/locationmodels/<int:locationmodel_id>/edit", methods=["GET", "POST"])
 def edit_locationmodel(locationmodel_id):
-    with Cursor() as cur:
-        sql = "SELECT id, name, deleted FROM locationmodel WHERE id = %(locationmodel_id)s;"
-        old = dict_from_select(cur, sql, {"locationmodel_id": locationmodel_id})
-        
-        form = ActionForm(request.form)
-        if request.method == "POST" and form.validate():
-            action = form.action.data
-            if action == _("Delete"):
-                perform_delete(cur, "locationmodel", row_id=locationmodel_id)
-            elif action == _("Restore"):
-                perform_restore(cur, "locationmodel", row_id=locationmodel_id)
-            return redirect(url_for(".locationmodel_list"))
-        
-        form = NameForm(request.form if request.method=="POST" else old)
-        if request.method == "POST" and form.validate():
-            try:
-                perform_edit(cur, "locationmodel", form.data, old, form)
-            except UniqueViolation as e:
-                form[unique_key(e)].errors = _("Must be unique.")
-            else:
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            sql = "SELECT id, name, deleted FROM locationmodel WHERE id = %(locationmodel_id)s;"
+            old = dict_from_select(cur, sql, {"locationmodel_id": locationmodel_id})
+            
+            form = ActionForm(request.form)
+            if request.method == "POST" and form.validate():
+                action = form.action.data
+                if action == _("Delete"):
+                    perform_delete(cur, "locationmodel", row_id=locationmodel_id)
+                elif action == _("Restore"):
+                    perform_restore(cur, "locationmodel", row_id=locationmodel_id)
                 return redirect(url_for(".locationmodel_list"))
+            
+            form = NameForm(request.form if request.method=="POST" else old)
+            if request.method == "POST" and form.validate():
+                try:
+                    perform_edit(cur, "locationmodel", form.data, old, form)
+                except UniqueViolation as e:
+                    form[unique_key(e)].errors = _("Must be unique.")
+                else:
+                    return redirect(url_for(".locationmodel_list"))
     
     buttons={"submit": (_("Save"), url_for(".edit_locationmodel", locationmodel_id=locationmodel_id)),
              "back": (_("Cancel"), url_for(".locationmodel_list"))}

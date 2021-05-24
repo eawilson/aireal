@@ -32,15 +32,8 @@ from passlib.hash import bcrypt_sha256
 from .forms import (LoginForm,
                    ChangePasswordForm,
                    TwoFactorForm)
-from .utils import (Transaction,
-                    Cursor,
-                    Blueprint,
-                    sign_token,
-                    render_template,
-                    render_page,
-                    abort,
-                    _navbars,
-                    original_referrer)
+from .utils import Transaction, Cursor
+from .flask import Blueprint, render_page, render_template, abort, original_referrer, sign_token, valid_roles, _navbars
 from .aws import sendmail
 from .i18n import _, locale_from_headers
 
@@ -57,7 +50,7 @@ __all__ = ("app",
            "send_setpassword_email")
 
 
-app = Blueprint("auth", __name__)
+app = Blueprint("Auth", __name__)
 
 
 
@@ -111,6 +104,7 @@ def root():
             return render_page("base.html")
     else:
         return redirect(url_for(".login"))
+        
 
 
 
@@ -119,14 +113,13 @@ def login():
     feedback = ""
     form = LoginForm(request.form)
     if request.method == "POST" and form.validate():
-        with Transaction() as trans:
-            with trans.cursor() as cur:
-                sql = """SELECT id, password, totp_secret, last_session
-                         FROM users
-                         WHERE email = %(email)s AND deleted = FALSE;"""
-                cur.execute(sql, {"email": form.email.data})
-                users_id, password, totp_secret, last_session = cur.fetchone() or (None, "", "", {})
-                
+        with Cursor() as cur:
+            sql = """SELECT id, password, totp_secret, last_session
+                     FROM users
+                     WHERE email = %(email)s AND deleted = FALSE;"""
+            cur.execute(sql, {"email": form.email.data})
+            users_id, password, totp_secret, last_session = cur.fetchone() or (None, "", "", {})
+            
         session.clear()
         one_time = hotp(totp_secret, int(time.time()) // 30)
         password_matches = verify_password(form.password.data, password)
@@ -139,21 +132,26 @@ def login():
             except pytz.exceptions.UnknownTimeZoneError:
                 session["timezone"] = "UTC"
             
-            with Transaction() as trans:
-                with trans.cursor() as cur:
-                    sql = """SELECT name
-                             FROM role_users
-                             WHERE users_id = %(users_id)s AND name IN %(valid_roles)s
-                             ORDER BY name = %(role)s DESC;"""
-                    cur.execute(sql, {"users_id": users_id, "role": last_session.get("role", ""), "valid_roles": Blueprint.valid_roles})
-                    role = (cur.fetchone() or (None,))[0]
-                        
+            with Cursor() as cur:
+                sql = """SELECT name
+                         FROM role_users
+                         WHERE users_id = %(users_id)s AND name IN %(valid_roles)s
+                         ORDER BY name = %(role)s DESC;"""
+                cur.execute(sql, {"users_id": users_id, "role": last_session.get("role", ""), "valid_roles": tuple(valid_roles)})
+                role = (cur.fetchone() or (None,))[0]
+            
             if role is not None:
                 setrole(role)
             if "project_id" in last_session:
                 setproject(last_session["project_id"])
             setlocale(last_session.get("locale", locale_from_headers()))
-            
+                
+            with Transaction() as trans:
+                with trans.cursor() as cur:
+                    sql = """UPDATE users
+                             SET last_login_datetime = CURRENT_TIMESTAMP
+                             WHERE id = %(users_id)s;"""
+                    cur.execute(sql, {"users_id": users_id})
             return redirect(url_for(".root"))
             
         feedback = _("Invalid credentials.")
@@ -201,7 +199,7 @@ def logout_menu():
                      FROM role_users
                      WHERE users_id = %(users_id)s AND name != %(role)s AND name IN %(valid_roles)s
                      ORDER BY role_users.name;"""
-            cur.execute(sql, {"users_id": session["id"], "role": session.get("role", ""), "valid_roles": Blueprint.valid_roles})
+            cur.execute(sql, {"users_id": session["id"], "role": session.get("role", ""), "valid_roles": tuple(valid_roles)})
             for role, in cur:
                 rows.append({"text": _(role), "href": url_for(".setrole", role=role)})
     if rows:
@@ -238,7 +236,7 @@ def setrole(role):
             sql = """SELECT name
                      FROM role_users
                      WHERE users_id = %(users_id)s AND name = %(role)s AND name IN %(valid_roles)s;"""
-            cur.execute(sql, {"users_id": session["id"], "role": role, "valid_roles": Blueprint.valid_roles})
+            cur.execute(sql, {"users_id": session["id"], "role": role, "valid_roles": tuple(valid_roles)})
             role = (cur.fetchone() or (None,))[0]
             
             if role is not None:
@@ -279,21 +277,22 @@ def project_menu():
 @app.route("/setproject/all", defaults={"project_id": None})
 @app.route("/setproject/<int:project_id>")
 def setproject(project_id):
-    if project_id is None:
-        project = _("All Projects")
-    else:
-        with Cursor() as cur:
-            sql = """SELECT project.name
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            if project_id is None:
+                project = _("All Projects")
+            else:
+                sql = """SELECT project.name
                         FROM project
                         INNER JOIN project_users ON project.id = project_users.project_id
                         WHERE project_users.users_id = %(users_id)s AND project.id = %(project_id)s AND project.deleted = FALSE;"""
-            cur.execute(sql, {"users_id": session["id"], "project_id": project_id})
-            project = (cur.fetchone() or (None,))[0]
+                cur.execute(sql, {"users_id": session["id"], "project_id": project_id})
+                project = (cur.fetchone() or (None,))[0]
 
-    if project:
-        session["project_id"] = project_id
-        session["project"] = project
-        update_last_session(cur, project_id=project_id, project=project)
+            if project:
+                session["project_id"] = project_id
+                session["project"] = project
+                update_last_session(cur, project_id=project_id, project=project)
     return redirect(request.referrer)
 
 
@@ -317,20 +316,21 @@ def change_password():
         
     form = ChangePasswordForm(request.form)
     if request.method == "POST" and form.validate():
-        with Cursor() as cur:
-            sql = """SELECT password
-                     FROM  users
-                     WHERE id = %(users_id)s;"""
-            cur.execute(sql, {"users_id": session["id"]})
-            old_password = (cur.fetchone() or ("",))[0]
-            if bcrypt_sha256.verify(form.old_password.data, old_password):
-                sql = """UPDATE users
-                         SET password = %(password)s, reset_datetime = %(reset_datetime)s
-                         WHERE id = %(id)s;"""
-                cur.execute(sql, {"password": bcrypt_sha256.hash(form.password1.data),
-                                  "reset_datetime": None,
-                                  "id": session["id"]})
-                return redirect(referrer)
+        with Transaction() as trans:
+            with trans.cursor() as cur:
+                sql = """SELECT password
+                        FROM  users
+                        WHERE id = %(users_id)s;"""
+                cur.execute(sql, {"users_id": session["id"]})
+                old_password = (cur.fetchone() or ("",))[0]
+                if bcrypt_sha256.verify(form.old_password.data, old_password):
+                    sql = """UPDATE users
+                            SET password = %(password)s, reset_datetime = %(reset_datetime)s
+                            WHERE id = %(id)s;"""
+                    cur.execute(sql, {"password": bcrypt_sha256.hash(form.password1.data),
+                                    "reset_datetime": None,
+                                    "id": session["id"]})
+                    return redirect(referrer)
         form.old_password.errors = _("Old password incorrect.")
     
     submit = ("Save", url_for(".change_password", referrer2=referrer))
@@ -339,40 +339,40 @@ def change_password():
 
 
 
-@app.signed_route("/setpassword", methods=["GET", "POST"], max_age=60*60*24*7)
-def set_password(data):
-    reset_datetime = data.get("reset_datetime", datetime.now(tz=timezone.utc))
-    email = data.get("email", "")
-    token = request.args.get("token", "")
+@app.route("/setpassword/<string:token>", methods=["GET", "POST"], signature="set_password", max_age=60*60*24*7)
+def set_password(token):
+    reset_datetime = token.get("reset_datetime", datetime.now(tz=timezone.utc))
+    email = token.get("email", "")
     
-    with Cursor() as cur:
-        sql = """SELECT id, totp_secret
-                 FROM users
-                 WHERE email = %(email)s AND reset_datetime = %(reset_datetime)s;"""
-        cur.execute(sql, {"email": email, "reset_datetime": reset_datetime})
-        users_id, totp_secret = cur.fetchone() or (None, None)
-        if users_id is None:
-            return redirect(url_for(".login"))
-        
-        form = ChangePasswordForm(request.form)
-        del form["old_password"]
-        if request.method == "POST" and form.validate():
-            if totp_secret:
-                reset_datetime = None
-                destination = url_for(".login")
-            else:
-                destination = url_for(".twofactor", token=token)
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            sql = """SELECT id, totp_secret
+                    FROM users
+                    WHERE email = %(email)s AND reset_datetime = %(reset_datetime)s;"""
+            cur.execute(sql, {"email": email, "reset_datetime": reset_datetime})
+            users_id, totp_secret = cur.fetchone() or (None, None)
+            if users_id is None:
+                return redirect(url_for(".login"))
+            
+            form = ChangePasswordForm(request.form)
+            del form["old_password"]
+            if request.method == "POST" and form.validate():
+                if totp_secret:
+                    reset_datetime = None
+                    destination = url_for(".login")
+                else:
+                    destination = url_for(".twofactor", token=token["token"])
+                    
+                sql = """UPDATE users
+                        SET password = %(password)s, reset_datetime = %(reset_datetime)s
+                        WHERE id = %(users_id)s;"""
+                cur.execute(sql, {"password": bcrypt_sha256.hash(form.password1.data),
+                                "reset_datetime": reset_datetime,
+                                "users_id": users_id})
+                session.clear()
+                return redirect(destination)
                 
-            sql = """UPDATE users
-                     SET password = %(password)s, reset_datetime = %(reset_datetime)s
-                     WHERE id = %(users_id)s;"""
-            cur.execute(sql, {"password": bcrypt_sha256.hash(form.password1.data),
-                              "reset_datetime": reset_datetime,
-                              "users_id": users_id})
-            session.clear()
-            return redirect(destination)
-                
-    submit = ("Save",  url_for(".set_password", token=token))
+    submit = ("Save",  url_for(".set_password", token=token["token"]))
     return render_page("login.html", form=form, submit=submit)
 
 
@@ -385,7 +385,7 @@ def send_setpassword_email(cur, email):
     cur.execute(sql, {"reset_datetime": reset_datetime, "email": email})
     if cur.rowcount:
         token = sign_token({"email": email, "reset_datetime": reset_datetime}, salt="set_password")
-        path = url_for("auth.set_password", token=token)
+        path = url_for("Auth.set_password", token=token)
         host = dict(request.headers)["Host"]
         link = f"http://{host}{path}"
         name = current_app.config.get("NAME", "<APP>")
@@ -397,8 +397,9 @@ def send_setpassword_email(cur, email):
             print(link)
 
 
-@app.signed_route("/qrcode/<string:email>/<string:secret>", salt="set_password", max_age=60*60*24*7)
-def qrcode(email, secret, data):
+@app.route("/qrcode/<string:email>/<string:secret>", defaults={"token": None})
+@app.route("/qrcode/<string:email>/<string:secret>/<string:token>", signature="set_password", max_age=60*60*24*7)
+def qrcode(email, secret, token):
     
     service = quote(current_app.config.get("NAME", "<APP>"))
     email = quote(email)
@@ -418,10 +419,10 @@ def qrcode(email, secret, data):
 
 
 
-@app.signed_route("/twofactor", methods=["GET", "POST"], salt="set_password", max_age=60*60*24*7)
-def twofactor(data):
+@app.route("/twofactor", methods=["GET", "POST"], defaults={"token": None})
+@app.route("/twofactor/<string:token>", methods=["GET", "POST"], signature="set_password", max_age=60*60*24*7)
+def twofactor(token):
     referrer = request.args.get("referrer2") or request.referrer
-    token = request.args.get("token", "")
     
     with Transaction() as trans:
         with trans.cursor() as cur:
@@ -435,11 +436,11 @@ def twofactor(data):
                 destination = referrer
                 
             else:
-                email = data.get("email", "")
+                email = token.get("email", "")
                 sql = """SELECT id
                          FROM users
                          WHERE email = %(email)s AND reset_datetime = %(reset_datetime)s;"""
-                cur.execute(sql, {"email": email, "reset_datetime": data.get("reset_datetime", datetime.now(tz=timezone.utc))})
+                cur.execute(sql, {"email": email, "reset_datetime": token.get("reset_datetime", datetime.now(tz=timezone.utc))})
                 users_id = (cur.fetchone() or (0,))[0]
                 destination = url_for(".login")
             
@@ -453,7 +454,7 @@ def twofactor(data):
                                   "reset_datetime": None})
                 return redirect(destination)
     
-    kwargs = {"token": token} if token else {}
+    kwargs = {"token": token["token"]} if token else {}
     secret = base64.b32encode(os.urandom(10)).decode("utf-8")
     qrcode_url = url_for(".qrcode", email=email, secret=secret, **kwargs)
     form.secret.data = secret

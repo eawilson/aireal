@@ -3,15 +3,8 @@ from werkzeug import exceptions
 
 from psycopg2.errors import UniqueViolation
 
-from ..utils import (Cursor,
-                     Transaction,
-                     dict_from_select,
-                     render_page,
-                    tablerow,
-                    navbar,
-                    Blueprint,
-                    abort,
-                    unique_key)
+from ..utils import Cursor, Transaction, dict_from_select, unique_key, tablerow
+from ..flask import render_page, valid_roles, abort
 from ..wrappers import Local, Attr, AnnotatedTupple
 from ..logic import perform_edit, perform_delete, perform_restore
 from ..auth import send_setpassword_email
@@ -66,7 +59,7 @@ def edit_user(users_id):
                         LEFT OUTER JOIN role_users ON role.name = role_users.name AND role_users.users_id = %(users_id)s
                         WHERE role.name IN %(valid_roles)s
                         ORDER BY role.name;"""
-            cur.execute(sql, {"users_id": users_id, "valid_roles": Blueprint.valid_roles})
+            cur.execute(sql, {"users_id": users_id, "valid_roles": tuple(valid_roles)})
             for role, selected in cur:
                 role_choices.append((role, __(role)))
                 if selected:
@@ -123,23 +116,24 @@ def list_users():
     with Cursor() as cur:
         last_users_id = None
         body = []
-        sql = """SELECT users.id, users.fullname, users.email, users.deleted, role_users.name
+        sql = """SELECT users.id, users.fullname, users.email, users.last_login_datetime, users.deleted, role_users.name
                 FROM users
                 LEFT OUTER JOIN role_users ON users.id = role_users.users_id AND role_users.name IN %(valid_roles)s
                 ORDER BY users.surname, users.forename, role_users.name;"""    
-        cur.execute(sql, {"valid_roles": Blueprint.valid_roles})
-        for users_id, fullname, email, deleted, role in cur:
+        cur.execute(sql, {"valid_roles": tuple(valid_roles)})
+        for users_id, fullname, email, last_login_datetime, deleted, role in cur:
             if users_id == last_users_id:
                 body[-1][0][2] += ", {}".format(_(role))
             else:
                 last_users_id = users_id
                 body.append(([fullname,
                             email,
-                            _(role)],
+                            _(role),
+                            Local(last_login_datetime)],
                             {"id": users_id,
                             "deleted": deleted}))
 
-    head = (_("Name"), _("Email"), _("Roles"))
+    head = (_("Name"), _("Email"), _("Roles"), _("Last Login"))
     actions = ({"name": _("Edit"), "href": url_for(".edit_user", users_id=0)},
                {"name": _("Delete"), "href": url_for(".edit_user", users_id=0), "class": "!deleted", "method": "POST"},
                {"name": _("Restore"), "href": url_for(".edit_user", users_id=0), "class": "deleted", "method": "POST"},

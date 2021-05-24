@@ -3,7 +3,8 @@ from werkzeug import exceptions
 
 from psycopg2.errors import UniqueViolation
 
-from ..utils import Cursor, abort, tablerow, render_page, dict_from_select, unique_key, Transaction
+from ..utils import Cursor, tablerow, dict_from_select, unique_key, Transaction
+from ..flask import abort, render_page
 from ..forms import ActionForm
 from .views import app
 from ..logic import perform_edit, perform_delete, perform_restore

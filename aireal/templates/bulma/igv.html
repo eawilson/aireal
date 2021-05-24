@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <!--title></title-->
+    <style>
+        #igvDiv {
+            padding-top: 10px;
+            padding-bottom: 10px;
+            border:1px solid lightgray;
+            }
+        #close {
+            color: black;
+            float: right;
+            }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome-free-5.12.1-web.min.css') }}">
+
+    <script src="{{ url_for('static', filename='js/jquery.3.6.0.min.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/aireal.js') }}"></script>
+</head>
+
+<body>
+    <a id="close" class="icon" href="{{ back_url }}"><i class="fas fa-window-close"></i></a>
+    <div id="igvDiv"></div>
+    
+    <script type="text/javascript" src="{{ url_for('static', filename='js/igv.2.8.2.js') }}" charset="utf-8"></script>
+    
+    <script type="text/javascript">
+    document.addEventListener("DOMContentLoaded", function () {
+
+        var options = {reference: {id: "hg19",
+                                   fastaURL: "https://s3.amazonaws.com/igv.broadinstitute.org/genomes/seq/1kg_v37/human_g1k_v37_decoy.fasta",
+                                   cytobandURL: "https://s3.amazonaws.com/igv.broadinstitute.org/genomes/seq/b37/b37_cytoband.txt"
+                                   },
+                       tracks: [
+//                                 {name: "{{ name }} variants",
+//                                  type: "variant",
+//                                  format: "vcf",
+//                                  url: "{{ vcf_url|safe }}",
+//                                 indexURL: "{{ vcftbi_url|safe }}"
+//                                  },
+                                {type: 'alignment',
+                                 format: 'bam',
+                                 url: '{{ bam_url|safe }}',
+                                 indexURL: '{{ bambai_url|safe }}',
+                                 name: '{{ name }}',
+                                 height: 600
+                                 },
+                                {name: "Genes",
+                                 type: "annotation",
+                                 format: "bed",
+                                 url: "https://s3.amazonaws.com/igv.broadinstitute.org/annotations/hg19/genes/refGene.hg19.bed.gz",
+                                 indexURL: "https://s3.amazonaws.com/igv.broadinstitute.org/annotations/hg19/genes/refGene.hg19.bed.gz.tbi",
+                                 order: Number.MAX_VALUE,
+                                 visibilityWindow: 300000000,
+                                 displayMode: "EXPANDED"
+                                 }
+                                ]};
+
+         igv.createBrowser(document.getElementById("igvDiv"), options)
+    })
+    </script>
+</body>
+
+</html>
+

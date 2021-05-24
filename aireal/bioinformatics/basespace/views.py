@@ -1,42 +1,42 @@
-import pdb, os
-from datetime import datetime, timedelta, date
-from itertools import count
+import os
 from contextlib import closing
 import socket
 from itertools import chain
 from collections import defaultdict, OrderedDict
-
-from sqlalchemy import select, join, or_, outerjoin, and_
-from sqlalchemy.exc import IntegrityError
+import pdb
 
 from flask import session, redirect, url_for, request, send_file, Blueprint, current_app
 from werkzeug.exceptions import Conflict, Forbidden, BadRequest, NotFound
 from werkzeug.datastructures import MultiDict
 from jinja2 import Markup
 
-from .models import users, bsaccounts, users_bsaccounts, bsruns, bsappsessions, bssamples, bsdatasets, projects, bsaccounts_bsruns, bsprojects, bsaccounts_bsprojects
 from .basespace import Session, Session2
 from .forms import SelectSamplesForm
 
-from limscore import engine, login_required, url_back, url_fwrd, navbar, abort, tablerow, navbar, Local, render_page, render_template, iso8601_to_utc
-from limscore.i18n import _
 
 
-app = Blueprint("basespace", __name__, url_prefix="/basespace", template_folder="templates")
+from limscore import url_back, url_fwrd, abort, tablerow, Local, render_page, render_template, iso8601_to_utc
+
+from ..utils import Cursor, Transaction
+from ..i18n import _
+
+
+app = Blueprint("Basespace", __name__, url_prefix="/basespace", role="Bioinformatics", template_folder="templates")
 
 
 
 @app.route("/accounts")
-@login_required("Bioinformatics.")
 def accounts():
-    with engine.connect() as conn:
-        sql = select([bsaccounts.c.id, bsaccounts.c.name]). \
-                select_from(join(bsaccounts, users_bsaccounts, bsaccounts.c.id == users_bsaccounts.c.bsaccount_id)). \
-                where(users_bsaccounts.c.user_id == session["id"]). \
-                order_by(bsaccounts.c.name)
+    with Cursor() as cur:
+        sql = """SELECT bsaccount.id, bsaccount.name
+                 FROM bsaccount
+                 JOIN users_bsaccount ON bsaccount.id = users_bsaccount.bsaccount_id
+                 WHERE users_bsaccount.user_id = %(users_id)s
+                 ORDER BY bsaccount.name;"""
         body = []
-        for row in conn.execute(sql):
-            url_link = url_fwrd(".runs", account_id=row["id"])
+        cur.execute(sql, {"users_id": session["id"]})
+        for bsaccount_id, bsaccount_name in cur:
+            url_link = url_fwrd(".runs", account_id=bsaccount_id)
             body += [tablerow(row["name"],
                               href=url_link)]
     
@@ -48,7 +48,6 @@ def accounts():
 
 
 @app.route("/accounts/new")
-@login_required("Bioinformatics.")
 def new_account():
     buttons = {"back": (_("Back"), url_back())}
     sock_path = os.path.join(current_app.instance_path, "auth_sock")
@@ -81,7 +80,6 @@ def new_account():
 
 
 @app.route("/accounts/<int:account_id>/runs")
-@login_required("Bioinformatics.")
 def runs(account_id):
     with engine.connect() as conn:
         sql = select([bsaccounts.c.name, bsaccounts.c.token, bsruns.c.bsid, bsruns.c.attr, bsruns.c.num_total, bsruns.c.num_uploaded]). \
@@ -164,7 +162,6 @@ def runs(account_id):
 
 
 @app.route("/runs/<int:account_id>/<int:bsrun_bsid>/samples", methods=["GET", "POST"])
-@login_required("Bioinformatics.")
 def samples(account_id, bsrun_bsid):
     with engine.connect() as conn:
         sql = select([bsaccounts.c.token,
@@ -352,7 +349,6 @@ def samples(account_id, bsrun_bsid):
 
 
 @app.route("/accounts/<int:account_id>/projects")
-@login_required("Bioinformatics.")
 def projectlist(account_id):
     with engine.connect() as conn:
         sql = select([bsaccounts.c.name, bsaccounts.c.token, bsprojects.c.bsid, bsprojects.c.attr, bsprojects.c.num_total, bsprojects.c.num_uploaded]). \

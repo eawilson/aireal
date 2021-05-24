@@ -176,7 +176,7 @@
 
         <tbody {% if table.actions %}data-menu-id="table-menu{{ table.id }}"{% endif %}>
             {% for row, attr in table.body %}
-                <tr {% if attr.deleted %}class="deleted"{% endif %} {% if attr.id %} data-id="{{ attr.id }}"{% endif %}>
+                <tr {% if attr.deleted %}class="deleted"{% endif %} {% if attr._class %}class="{{ attr._class }}"{% endif %} {% if attr.id %} data-id="{{ attr.id }}"{% endif %}>
                     {% for col in row %}
                         <td{% if col.value %} data-sort-value="{{ col.value }}"{% endif %}>{{ col }}</td>
                     {% endfor %}
