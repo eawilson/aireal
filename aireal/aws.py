@@ -113,12 +113,13 @@ def cloudfront_sign_cookies(url, key_id, **offset):
 
 def s3_sign_url(bucket, key, **offset):
     expires = int(timedelta(**(offset or {"days": 1})).total_seconds())
+    print(expires)
     client = boto3.client("s3", config=Config(s3={"use_accelerate_endpoint": True}))
     return client.generate_presigned_url(ClientMethod="put_object",
-                                         Params={"Bucket": bucket,
-                                                 "Key": key,
-                                                 "ContentType": "binary/octet-stream"},
-                                         ExpiresIn=expires)
+                                         ExpiresIn=expires,
+                                         Params={"Bucket": bucket, "Key": key})
+                                                 #"ContentType": "binary/octet-stream"})
+                                         
 
 
 

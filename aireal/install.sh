@@ -5,7 +5,7 @@ DOMAIN = ""
 
 sudo apt-get -y update
 sudo apt-get -y dist-upgrade
-sudo apt-get install python3-pip
+sudo apt-get -y install python3-pip
 sudo pip3 install setuptools
 
 
@@ -135,10 +135,9 @@ sudo -u postgres psql -c 'grant all privileges on database prod to flask;'
 mkdir -p /var/log/journal
 sudo systemd-tmpfiles --create --prefix /var/log/journal
 
-sudo useradd flask --shell /usr/bin/false
+sudo useradd flask -m --shell /usr/bin/false
 sudo usermod flask -L
-sudo mkdir /home/flask/$APP_prod
-sudo chown flask /home/flask/$APP_prod
+sudo -u flask mkdir "/home/flask/$APP"_prod
 
 ssh-keygen -t rsa -b 4096
 eval "$(ssh-agent -s)"
@@ -158,8 +157,8 @@ After=network.target
 
 [Service]
 User=flask
-WorkingDirectory=/home/flask/$APP_prod
-ExecStart=/usr/local/bin/waitress_serve --port 8080 '$APP:create_app(\"/home/flask/aireal_prod\")'
+WorkingDirectory=/home/flask/aireal_prod
+ExecStart=/usr/local/bin/waitress_serve --port 8080 'aireal:create_app(\"/home/flask/aireal_prod\")'
 Restart=always
 
 [Install]
