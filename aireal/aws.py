@@ -55,7 +55,7 @@ def ec2_metadata():
     response = session.get(f"{BASE_URL}/meta-data/placement/region",
                            timeout=2.0)
     if response.status_code == 200:
-        metadata["AWS_REGION"] = response
+        metadata["AWS_REGION"] = response.text
     
     response = session.get(f"{BASE_URL}/meta-data/mac",
                            timeout=2.0)
