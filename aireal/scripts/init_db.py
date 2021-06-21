@@ -21,7 +21,7 @@ def _(text):
 
 
 
-def init_db(nstance_path, no_data):
+def init_db(instance_path, no_data):
     """ 
     """
     global trans
