@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import waitress
 import importlib
 import sys

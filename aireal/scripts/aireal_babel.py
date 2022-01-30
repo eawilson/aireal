@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import subprocess
 
@@ -5,7 +7,7 @@ import aireal
 
 
 
-def run_pybabel():
+def main():
     package_path = os.path.dirname(aireal.__file__)
     locales_dir = os.path.join(package_path, "locales")
     
@@ -30,4 +32,4 @@ def run_pybabel():
 
 
 if _name__ == "__main__":
-    run_pybabel()
+    main()

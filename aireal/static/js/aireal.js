@@ -1,15 +1,18 @@
+// function navigate(href) {
+//         var url = new URL(href, window.location.href);
+//         if (url.pathname == "/back") {
+//             var navstack = JSON.parse(sessionStorage.getItem("navstack"));
+//             if (navstack === null || !navstack.length) {
+//                 url = new URL("/", window.location.href);
+//                 navstack = [url.href];
+//                 }
+//             href = navstack[navstack.length - 1];
+//             }
+//         window.location.replace(href);
+//         }
 function navigate(href) {
-        var url = new URL(href, window.location.href);
-        if (url.pathname == "/back") {
-            var navstack = JSON.parse(sessionStorage.getItem("navstack"));
-            if (navstack === null || !navstack.length) {
-                url = new URL("/", window.location.href);
-                navstack = [url.href];
-                }
-            href = navstack[navstack.length - 1];
-            }
-        window.location.replace(href);
-        }
+    window.location.replace(href);
+    }
 
 
 function navigateHandler(e) {
@@ -41,35 +44,37 @@ function closeModals() {
 
 
 defer (function() {
-    if (document.referrer) {
-        var url = new URL(window.location.href);
-        var dir = url.searchParams.get("dir");
-        var referrer = new URL(document.referrer);
-        if (dir && url.pathname != referrer.pathname) {
-            var navstack = JSON.parse(sessionStorage.getItem("navstack"));
-            if (navstack === null) {
-                navstack = [];
-                }
-            else if (navstack.length > 9) {
-                navstack.shift();
-                }
-            
-            if (dir == "1") {
-                referrer.searchParams.set("dir", "-1");
-                navstack.push(referrer.href);
-                }
-            else if (dir == "-1") {
-                navstack.pop();
-                }
-            
-            sessionStorage.setItem("navstack", JSON.stringify(navstack));
-            }
-        }
+//     if (document.referrer) {
+//         var url = new URL(window.location.href);
+//         var dir = url.searchParams.get("dir");
+//         var referrer = new URL(document.referrer);
+//         if (dir && url.pathname != referrer.pathname) {
+//             var navstack = JSON.parse(sessionStorage.getItem("navstack"));
+//             if (navstack === null) {
+//                 navstack = [];
+//                 }
+//             else if (navstack.length > 9) {
+//                 navstack.shift();
+//                 }
+//             
+//             if (dir == "1") {
+//                 referrer.searchParams.set("dir", "-1");
+//                 navstack.push(referrer.href);
+//                 }
+//             else if (dir == "-1") {
+//                 navstack.pop();
+//                 }
+//             
+//             sessionStorage.setItem("navstack", JSON.stringify(navstack));
+//             }
+//         }
     
     
     const anchors = document.querySelectorAll('a[href]');
     for (var i = 0; i < anchors.length; ++i) {
-        anchors[i].addEventListener('click', navigateHandler);
+        if (anchors[i].target != '_blank') {
+            anchors[i].addEventListener('click', navigateHandler);
+            }
         }
     
     // Only allow a form to be submitted once. Should have sufficient logic

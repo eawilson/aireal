@@ -1,24 +1,15 @@
-from limscore.forms import (Form,
-                            Input,
-                            TextInput,
-                            TextAreaInput,
-                            HiddenInput,
-                            PasswordInput,
-                            NameInput,
-                            TextNumberInput,
-                            LowerCaseInput,
-                            EmailInput,
-                            IntegerInput,
-                            DecimalInput,
-                            NHSNumberInput,
-                            DateInput,
-                            PastDateInput,
-                            BooleanInput,
-                            SelectInput,
-                            MultiSelectInput,
-                            MultiCheckboxInput)
-from limscore.i18n import _
+from ...forms import (Form,
+                    SelectInput)
+from ...i18n import __ as _
 
-class SelectSamplesForm(Form):
+
+
+#class SelectSamplesForm(Form):
+    #def definition(self):
+        #self.bssample_ids = MultiCheckboxInput("", required=_("No samples selected."), coerce=int)
+
+
+
+class ServerForm(Form):
     def definition(self):
-        self.bssample_ids = MultiCheckboxInput("", required=_("No samples selected."), coerce=int)
+        self.bsserver_id = SelectInput(_("BaseSpace Region"))

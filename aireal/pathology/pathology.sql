@@ -33,3 +33,4 @@ CREATE TABLE IF NOT EXISTS slide (
     );
 
 
+INSERT INTO role (name) VALUES ('Pathology');

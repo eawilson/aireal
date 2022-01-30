@@ -19,7 +19,6 @@ class UserForm(Form):
         self.forename = TextInput(_("Forename"))        
         self.email = EmailInput(_("Email"))
         self.role = MultiCheckboxInput(_("Roles"), coerce=str, required=False)
-        self.restricted = BooleanInput(_("Restrict Projects"), details=_("Only allow access to selected projects."), required=False)        
         self.project = MultiCheckboxInput(_("Projects"), required=False)
 
 

@@ -8,7 +8,7 @@ from ..flask import Blueprint, abort, render_page, render_template
 from ..utils import tablerow
 from ..i18n import _
 from ..aws import list_objects, cloudfront_sign_url
-
+from .basespace import app as basespace
 
 
 def bioinformatics_navbar():
@@ -21,14 +21,15 @@ def bioinformatics_navbar():
 
 
 app = Blueprint("Bioinformatics", __name__, navbar=bioinformatics_navbar)
-
+app.register_blueprint(basespace)
 
 
 
 @app.route("/importmenu")
 def import_menu():
-    menu = [{"text": _("BaseSpace"), "href": url_for("basespace.accounts")},
-            {"text": _("Nanopre"), "href": url_for("nanopore.runs")}]
+    menu = [{"text": _("BaseSpace"), "href": url_for(".Basespace.accounts")},
+            #{"text": _("Nanopre"), "href": url_for("nanopore.runs")}
+           ]
     return render_template("dropdown.html", items=menu)
 
 

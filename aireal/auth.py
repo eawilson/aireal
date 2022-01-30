@@ -378,23 +378,23 @@ def set_password(token):
 
 
 def send_setpassword_email(cur, email):
-    reset_datetime = str(datetime.now(tz=timezone.utc))
-    sql = """UPDATE users
-             SET reset_datetime = %(reset_datetime)s
-             WHERE users.email = %(email)s;"""
-    cur.execute(sql, {"reset_datetime": reset_datetime, "email": email})
-    if cur.rowcount:
-        token = sign_token({"email": email, "reset_datetime": reset_datetime}, salt="set_password")
-        path = url_for("Auth.set_password", token=token)
-        host = dict(request.headers)["Host"]
-        link = f"http://{host}{path}"
-        name = current_app.config.get("NAME", "<APP>")
-        body = _("Please follow {} to reset your {} password. This link can only be used once and will expire in 7 days.").format(link, name)
-        subject = _("{} Password Link").format(name)
-        if email != "someone@example.com":
+    if email != "someone@example.com":
+        reset_datetime = str(datetime.now(tz=timezone.utc))
+        sql = """UPDATE users
+                 SET reset_datetime = clock_timestamp()
+                 WHERE users.email = %(email)s
+                 RETURNING reset_datetime;"""
+        cur.execute(sql, {"email": email})
+        if cur.rowcount:
+            token = sign_token({"email": email, "reset_datetime": cur.fetchone[0]}, salt="set_password")
+            path = url_for("Auth.set_password", token=token)
+            host = dict(request.headers)["Host"]
+            link = f"https://{host}{path}"
+            name = current_app.config.get("NAME", "<APP>")
+            body = _("Please follow {} to reset your {} password. This link can only be used once and will expire in 7 days.").format(link, name)
+            subject = _("{} Password Link").format(name)
             sendmail(email, subject, body)
-        else:
-            print(link)
+
 
 
 @app.route("/qrcode/<string:email>/<string:secret>", defaults={"token": None})

@@ -1,0 +1,1 @@
+diff --recursive --ignore-space-change --new-file -x '*.py' -x '*.pyc' -x '*.sh' -x '*.html' -x '*.txt'  -x '*.pot' -x '*.po' -x 'Dockerfile' -x '*.postgresql' -x '*.css' -x '*.png' -x '*.js' -x '*.eot' -x '*.svg' -x '*.woff' -x '*.woff2' -x '*.ttf' "$@"

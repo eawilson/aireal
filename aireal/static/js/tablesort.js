@@ -23,6 +23,11 @@
 
     function sortHandler(e) {
         const clickedCell = ancestorByTag(e.target, 'TH');
+        
+        if (!clickedCell.innerText) {
+            return;
+            }
+        
         const tbody = ancestorByTag(clickedCell ,'TABLE').querySelector('tbody');
         const sortClass = clickedCell.classList.contains('sorted-asc') ? 'sorted-desc' : 'sorted-asc';
         

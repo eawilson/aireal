@@ -98,7 +98,8 @@
     function clickMenu(e) {
         const menuItem = e.currentTarget;
         const url = new URL(menuItem.dataset.href, window.location.href);
-        url.pathname = url.pathname.replace("0", activeRow.dataset.id);
+        url.pathname = url.pathname.replace(/\/0$/, '/' + activeRow.dataset.id);
+        url.pathname = url.pathname.replace(/\/0\//, '/' + activeRow.dataset.id + '/');
         
         if (typeof e.preventDefault === 'function') {
             e.preventDefault();

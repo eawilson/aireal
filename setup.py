@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from setuptools import setup
 import os
 
@@ -28,7 +30,7 @@ setup(name="aireal",
                       "boto3"],
     entry_points = { "console_scripts":
         ["waitress_serve=aireal.scripts.waitress_serve:main",
-         "aireal_babel=aireal.scripts.aireal_babel:run_pybabel"]},
+         "bsauth=aireal.bioinformatics.basespace.bsauth:main"]},
     message_extractors = {"aireal":
         [("**.py", "python", None),
          ("**/templates/**.html", "jinja2.ext.autoescape,jinja2.ext.with_", None)]},

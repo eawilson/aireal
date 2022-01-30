@@ -77,10 +77,12 @@
 
 
 
+{#
 {% macro render_buttons2(buttons) %}
     {% if buttons.submit %}<button {{ buttons.submit.attr(class="button is-link", _type="submit") }} >{% endif %}
     {% if buttons.back %}<a {{ buttons.back.attr(class="button is-link") }}>{{ buttons.back.text }}</a>{% endif %}
 {% endmacro %}
+#}
 
 
 
@@ -131,7 +133,7 @@
         
             {% if table.title %}<span>{{ table.title }}</span>{% endif %}
             
-            {% if table.get(showhide, True) %}
+            {% if table.get("showhide", True) %}
                 <a id="show-hide-button" class="button is-info is-light is-pulled-right is-small"></a>
                 <script>
                     defer(function() {

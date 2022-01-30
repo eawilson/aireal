@@ -106,7 +106,6 @@ class Blueprint(flask.Blueprint):
                 This depends on private internals of the Blueprint which could
                 potentialy change in future versions.
             """
-            
             if signature:
                 self.signatures[rule] = partial(_validate_token,
                                                 max_age=max_age,

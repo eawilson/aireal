@@ -5,8 +5,16 @@ DOMAIN = ""
 
 sudo apt-get -y update
 sudo apt-get -y dist-upgrade
+sudo apt-get -y install unzip
 sudo apt-get -y install python3-pip
 sudo pip3 install setuptools
+
+
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+rm awscliv2.zip
+sudo rm -rf aws
 
 
 # NGINX
@@ -100,7 +108,7 @@ sudo mv nginx.conf /etc/nginx/nginx.conf
 #route53:ChangeResourceRecordSets
 sudo apt-get -y install python3-certbot python3-certbot-nginx python3-certbot-dns-route53
 sudo certbot certonly --dns-route53 -d $DOMAIN -d www.$DOMAIN -d lab.$DOMAIN -i nginx
-(crontab -l 2>/dev/null; echo "0 12 * * * /usr/bin/certbot renew --quiet") | crontab -
+(crontab -l 2>/dev/null; echo "0 12 * * * /usr/bin/certbot renew -i nginx --quiet") | crontab -
 
 sudo systemctl restart nginx
 

@@ -32,7 +32,7 @@ def edit_user(users_id):
     with Transaction() as trans:
         with trans.cursor() as cur:
             if users_id is not None:
-                sql = """SELECT id, forename, surname, email, restricted, deleted
+                sql = """SELECT id, forename, surname, email, deleted
                         FROM users
                         WHERE id = %(users_id)s;"""
                 old = dict_from_select(cur, sql, {"users_id": users_id})

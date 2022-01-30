@@ -2,14 +2,15 @@ from datetime import datetime, timezone
 
 from flask import url_for
 
-from ..utils import tablerow, Transaction
-from ..flask import Blueprint, render_page
+from ..utils import Cursor, Transaction, tablerow, iso8601_to_utc
+from flask import session, redirect, url_for, request, send_file, current_app
+from ..flask import abort, render_page, render_template, Blueprint, sign_token, absolute_url_for
 from ..i18n import _
 
 
 
 def reception_navbar():
-    return [{"text": _("Collections"), "href":  url_for("reception.collection_list")}]
+    return [{"text": _("Collections"), "href":  url_for("Reception.collection_list")}]
 
 
 app = Blueprint("Reception", __name__, navbar=reception_navbar)
@@ -18,7 +19,25 @@ app = Blueprint("Reception", __name__, navbar=reception_navbar)
 
 @app.route("/collections")
 def collection_list():
-    return 
+    with Cursor() as cur:
+        sql = """SELECT bsaccount.id, bsaccount.name, bsserver.region, bsserver.country
+                 FROM bsaccount
+                 JOIN users_bsaccount ON bsaccount.id = users_bsaccount.bsaccount_id
+                 JOIN bsserver ON bsserver.id = bsaccount.bsserver_id
+                 WHERE users_bsaccount.users_id = %(users_id)s
+                 ORDER BY bsaccount.name;"""
+        body = []
+        cur.execute(sql, {"users_id": session["id"]})
+        for bsaccount_id, bsaccount_name, region, country in cur:
+            body.append(((bsaccount_name,
+                          "{} ({})".format(region, _(country))),
+                          {"id": bsaccount_id}))
+    
+    actions = ({"name": _("Select"), "href": url_for("Bioinformatics.Basespace.runs", account_id=0)},)
+    table = {"head": (_("Account"), _("Region")),
+             "body": body,
+             "new": url_for("Bioinformatics.Basespace.new_account")}
+    return render_page("table.html", table=table, title=_("BaseSpace"), buttons=())
     now = utcnow()
     today = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
     filters = [collection.c.received_datetime >= today]
@@ -56,6 +75,23 @@ def collection_list():
     return render_page("table.html",
                        table={"head": head, "body": body, "actions": actions, "new": ("", url_for(".new_collection")), "title": _("Collections")},
                        buttons=())
+    _("Reception")
+    _("LoBind")
+    _("Standard")
+    _("Home")
+    _("Site")
+    _("Building")
+    _("Room")
+    _("Archive")
+    _("Fridge")
+    _("Freezer")
+    _("Cupboard")
+    _("Rack")
+    _("Shelf")
+    _("Tray")
+    _("Box")
+    _("Tube")
+
 
 @app.route("/collections/<int:collection_id>")
 def view_collection(collection_id):

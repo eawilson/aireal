@@ -94,7 +94,7 @@ def create_app(instance_path="."):
     app.register_blueprint(bioinformatics)
     app.register_blueprint(pathology)
     app.register_blueprint(reception)
-
+    
     return app
 
 
