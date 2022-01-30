@@ -1,8 +1,67 @@
 {% extends "bulma/base.html" %} 
 
-{% import "bulma/macros.html" as macros %}
-
 {% block content %}
-    {{ macros.render_table(table) }}
-    {{ macros.render_buttons(buttons) }}
+    <script src="{{ url_for('static', filename='js/table.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/tablesort.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/tablemenu.js') }}" defer></script>
+    
+    <div>
+        {% if table.breadcrumbs %}
+            <nav class="breadcrumb">
+                <ul>
+                    {% for name, url, active in table.breadcrumbs %}
+                        <li {% if active %}class="is-active"{% endif %}><a href="{{ url }}">{{ name }}</a></li> 
+                    {% endfor %}
+                </ul>
+            </nav>
+        {% endif %}
+    
+        <div>
+            {% if table.title %}<span>{{ table.title }}</span>{% endif %}
+            
+            {% if table.get("showhide", True) %}
+                <a id="show-hide-button" class="button is-info is-light is-pulled-right is-small" data-show-text="{{ _("Show Deleted") }}" data-hide-text="{{ _("Hide Deleted") }}"></a>
+            {% endif %}
+        </div>
+        {% if table.new %}<a class="icon" href="{{ table.new }}"><i class="fas fa-plus"></i></a>{% endif %}
+    </div>
+    
+    <table class="table is-striped is-fullwidth">
+        <thead class="is-sortable">
+            <tr>
+                {% for col in table.head %}
+                    <th>{{ col }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+
+        <tbody{% if table.actions %} data-menu-id="table-menu{{ table.id }}"{% endif %}>
+            {% for row, attr in table.body %}
+                <tr{% if attr.deleted %} class="deleted"{% endif %}{% if attr._class %} class="{{ attr._class }}"{% endif %}{% if attr.id %} data-id="{{ attr.id }}"{% endif %}>
+                    {% for col in row %}
+                        <td{% if col.value %} data-sort-value="{{ col.value }}"{% endif %}>{{ col }}</td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    {% if table.actions %}
+        <div class="dropdown" id="table-menu{{ table.id }}">
+            <div class="dropdown-menu">
+                <div class="dropdown-content">
+                    {% for action in table.actions %}
+                        <a class="dropdown-item" data-href="{{ action.href }}" data-method="{{ action.method }}" data-visible-if="{{ action.class }}">{{ action.name }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+    
+
+    {{ table_form }}
+        <input id="action" type="hidden" name="action" value="">
+        {% if buttons.submit %}<input id="submit-button" class="button is-link" type="submit" value="{{ buttons.submit[0] }}" form="table-form" formaction="{{ buttons.submit[1] }}">{% endif %}
+        {% if buttons.back %}<a id="back-button" class="button is-link" href="{{ buttons.back[1] }}">{{ buttons.back[0] }}</a>{% endif %}
+    </form>
 {% endblock %}

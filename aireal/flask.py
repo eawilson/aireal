@@ -210,7 +210,7 @@ def render_page(name, active=None, **context):
                   "active": active,
                   "left": _navbars[session["role"]](),
                   "right": right}
-    return render_template(name, navbar=navbar, action_form=ActionForm(id="action-form"), **context)
+    return render_template(name, navbar=navbar, table_form=ActionForm(id="table-form"), **context)
 
 
 

@@ -10,40 +10,39 @@
 //             }
 //         window.location.replace(href);
 //         }
+
 function navigate(href) {
     window.location.replace(href);
     }
 
 
-function navigateHandler(e) {
-    e.preventDefault();
-    navigate(e.currentTarget.href);
-    }
 
-
-function defer(func) {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', func);
+function ajaxGet(url, callback, element) {
+    const httpRequest = new XMLHttpRequest();
+    
+    function checkSuccess() {
+        if (httpRequest.readyState === XMLHttpRequest.DONE &&  httpRequest.status === 200) {
+            callback(element, httpRequest.responseText);
+            }
         }
-    else {  // `DOMContentLoaded` has already fired
-        func();
-        }
+    
+    httpRequest.onreadystatechange = checkSuccess;
+    httpRequest.open('GET', url);
+    httpRequest.send();
     }
 
 
-function openModal(identifier) {
-    document.documentElement.classList.add("is-clipped");
-    $(identifier).addClass("is-active");
-    }
+// function defer(func) {
+//     if (document.readyState === 'loading') {
+//         document.addEventListener('DOMContentLoaded', func);
+//         }
+//     else {  // `DOMContentLoaded` has already fired
+//         func();
+//         }
+//     }
 
 
-function closeModals() {
-    document.documentElement.classList.remove("is-clipped");
-    $(".modal").removeClass("is-active");
-    }
-
-
-defer (function() {
+//defer (function() {
 //     if (document.referrer) {
 //         var url = new URL(window.location.href);
 //         var dir = url.searchParams.get("dir");
@@ -69,6 +68,12 @@ defer (function() {
 //             }
 //         }
     
+(function() {
+    
+    function navigateHandler(e) {
+        e.preventDefault();
+        navigate(e.currentTarget.href);
+        }
     
     const anchors = document.querySelectorAll('a[href]');
     for (var i = 0; i < anchors.length; ++i) {
@@ -77,72 +82,33 @@ defer (function() {
             }
         }
     
-    // Only allow a form to be submitted once. Should have sufficient logic
-    // to prevent dara corruption if multiple submissions but this ensures
-    // that the response the user sees reflects the first submission.
-    $('form').one('submit', function() {
-        var navstack = JSON.parse(sessionStorage.getItem("navstack"));
-        if (navstack !== null && navstack.length) {
-            $(this).children('input[name="back"]').val(navstack[navstack.length - 1]);
-            }
-        $(this).children('input[type="submit"]').attr('disabled', true);
-        return true;
-        });
-
-
+    
+    
     // Lazy load dropdown menus.
-    $('.has-dropdown').one('mouseenter', function() {
-        $(this).children('.navbar-dropdown').load($(this).attr('data-href'));
-        return true;
-        });
-
-    
-    // Prevent accidental dragging of elements as looks ugly.
-    $('body').on('ondragstart', function() {
-        return false;
-        });
-    
-    
-    $(".modal-close").on("click", closeModals);
-    
-    
-    $("input").on("invalid", function() {
-        $(this).addClass("is-danger");
-        });
-    
-    
-    $("input").on("input", function() {
-        $(this).removeClass("is-danger");
-        });
-    
-    $(".get-dynamic-fields").on("change", function() {
-        function swapFields(data, textStatus, jqXHR) {
-            var root = this;
-            while (root.parentElement.nodeName != 'FORM') {
-                root = root.parentElement;
-                if (root == null) {
-                    return;
-                    }
-                }
-            
-            var elem = root.nextSibling;
-            while (elem !== null && (elem.nodeName == '#text' || elem.nodeName == 'DIV')) {
-                var unwanted = elem;
-                elem = elem.nextSibling;
-                unwanted.remove();
-                }
-            
-            root.insertAdjacentHTML('afterend', data);
-            }
+    function insertDropdown(element, data) {
+        element.querySelector('.navbar-dropdown').innerHTML = data;
+        }
         
-        var url = new URL(window.location.href);
-        url.searchParams.set(this.name, this.value);
-        $.ajax({url: url.href,
-                context: this,
-                success: swapFields});
-        });
+    function dropdownHandler(e) {
+        const target = e.target;
+        ajaxGet(target.dataset.href, insertDropdown, target);
+        }
+
+    const dropdowns = document.querySelectorAll('.has-dropdown');
+    for (var i = 0; i < dropdowns.length; ++i) {
+        dropdowns[i].addEventListener('mouseenter', dropdownHandler, {'once': true});
+        }
+
+
+
+    // Prevent accidental dragging of elements as looks ugly.
+    function preventDefault(e) {
+        e.preventDefault();
+        }
     
-    });
+    document.body.addEventListener('ondragstart', preventDefault);
+
+    })();
 
 
 

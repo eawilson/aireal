@@ -342,7 +342,7 @@ def bsdatasets(account_id, bsrun_bsid, bsappsession_bsid):
                 if body and body[-1][0][1] == name:
                     body[-1][0][2] += item["Attributes"].get("common_fastq", {}).get("TotalReadsPF", 0)
                 else:
-                    body.append(([Markup(render_template("checkbox.html", form="action-form", name=escape(name))),
+                    body.append(([Markup(render_template("checkbox.html", form="table-form", name=escape(name))),
                                   name,
                                   item["Attributes"].get("common_fastq", {}).get("TotalReadsPF", 0),
                                   "{:.2f}GB".format(item.get("TotalSize", 0) / 1000000000),

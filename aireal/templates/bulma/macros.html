@@ -77,15 +77,6 @@
 
 
 
-{#
-{% macro render_buttons2(buttons) %}
-    {% if buttons.submit %}<button {{ buttons.submit.attr(class="button is-link", _type="submit") }} >{% endif %}
-    {% if buttons.back %}<a {{ buttons.back.attr(class="button is-link") }}>{{ buttons.back.text }}</a>{% endif %}
-{% endmacro %}
-#}
-
-
-
 {% macro render_modal(modal) %}
     <div id="modal" class="modal">
         <div id="modal-background" class="modal-background"></div>
@@ -115,100 +106,6 @@
         return false;
         });
 {% endmacro %}
-
-
-
-{% macro render_table(table) %}
-    <div>
-        <div>
-            {% if table.breadcrumbs %}
-                <nav class="breadcrumb">
-                    <ul>
-                        {% for name, url, active in table.breadcrumbs %}
-                            <li {% if active %}class="is-active"{% endif %}><a href="{{ url }}">{{ name }}</a></li> 
-                        {% endfor %}
-                    </ul>
-                </nav>
-            {% endif %}
-        
-            {% if table.title %}<span>{{ table.title }}</span>{% endif %}
-            
-            {% if table.get("showhide", True) %}
-                <a id="show-hide-button" class="button is-info is-light is-pulled-right is-small"></a>
-                <script>
-                    defer(function() {
-                        const showHide = document.getElementById("show-hide-button");
-                        const url = new URL(window.location.href);
-                        const hide = JSON.parse(sessionStorage.getItem("hide")) || {};
-                        
-                        function toggle() {
-                            hide[url.pth] = !hide[url.path];
-                            updateTable();
-                            sessionStorage.setItem("hide", JSON.stringify(hide));
-                            }
-                        
-                        function updateTable() {
-                            if (hide[url.pth]) {
-                                showHide.innerHTML = '{{ _("Show Deleted") }}';
-                                $("tr.deleted").hide();
-                                }
-                            else {
-                                showHide.innerHTML = '{{ _("Hide Deleted") }}';
-                                $("tr.deleted").show();
-                                }
-                            }
-                        
-                        updateTable();
-                        $("#show-hide-button").on("click", toggle);
-                        });
-                </script>
-            {% endif %}
-        </div>
-        {% if table.new %}<a class="icon" href="{{ table.new }}"><i class="fas fa-plus"></i></a>{% endif %}
-    </div>
-    
-    <table class="table is-striped is-fullwidth">
-        <thead class="is-sortable">
-            <tr>
-                {% for col in table.head %}
-                    <th>{{ col }}</th>
-                {% endfor %}
-            </tr>
-        </thead>
-
-        <tbody {% if table.actions %}data-menu-id="table-menu{{ table.id }}"{% endif %}>
-            {% for row, attr in table.body %}
-                <tr {% if attr.deleted %}class="deleted"{% endif %} {% if attr._class %}class="{{ attr._class }}"{% endif %} {% if attr.id %} data-id="{{ attr.id }}"{% endif %}>
-                    {% for col in row %}
-                        <td{% if col.value %} data-sort-value="{{ col.value }}"{% endif %}>{{ col }}</td>
-                    {% endfor %}
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    
-    {% if table.actions %}
-        <div class="dropdown" id="table-menu{{ table.id }}">
-            <div class="dropdown-menu">
-                <div class="dropdown-content">
-                    {% for action in table.actions %}
-                        <a class="dropdown-item" data-href="{{ action.href }}" data-method="{{ action.method }}" data-visible-if="{{ action.class }}">{{ action.name }}</a>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    {% endif %}
-
-{% endmacro %}
         
 
 
-{% macro render_form(form, buttons) %}
-    {{ form }}
-        {% for field in form.values() %}
-            {{ render_field(field) }}
-        {% endfor %}
-        {{ render_buttons(buttons) }}
-    </form>
-    <p class="help is-danger">{{ form.error }}</p>
-{% endmacro %}

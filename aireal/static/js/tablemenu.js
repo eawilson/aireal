@@ -108,7 +108,7 @@
         if (menuItem.dataset.method == "POST") {
             const action = document.getElementById("action");
             action.value = menuItem.textContent;
-            const form = document.getElementById("action-form");
+            const form = document.getElementById("table-form");
             form.action = url.href;
             form.submit();
             }

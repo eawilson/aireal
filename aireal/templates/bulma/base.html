@@ -10,10 +10,8 @@
         <link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome-free-5.12.1-web.min.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/aireal-bulma.css') }}">
 
-        <script src="{{ url_for('static', filename='js/jquery.3.6.0.min.js') }}" defer></script>
-        <script src="{{ url_for('static', filename='js/tablesort.js') }}" defer></script>
-        <script src="{{ url_for('static', filename='js/tablemenu.js') }}" defer></script>
-        <script src="{{ url_for('static', filename='js/aireal.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/aireal.js') }}" defer></script>
+<!--        <script src="{{ url_for('static', filename='js/jquery.3.6.0.min.js') }}" defer></script>-->
     </head>
 
     <body class="has-navbar-fixed-top">
@@ -56,7 +54,6 @@
         </nav>
         
         <section class="main-section">
-            
             {% if tabs %}
                 <div class="tabs is-boxed">
                     <ul>
@@ -75,6 +72,5 @@
             {% endblock %}
         </section>
         
-        {{ action_form }}<input id="action" type="hidden" name="action" value=""></form>
     </body>
 </html>

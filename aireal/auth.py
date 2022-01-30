@@ -378,7 +378,7 @@ def set_password(token):
 
 
 def send_setpassword_email(cur, email):
-    if email != "someone@example.com":
+    if not(email.endswith("@example.com")):
         reset_datetime = str(datetime.now(tz=timezone.utc))
         sql = """UPDATE users
                  SET reset_datetime = clock_timestamp()
@@ -386,7 +386,7 @@ def send_setpassword_email(cur, email):
                  RETURNING reset_datetime;"""
         cur.execute(sql, {"email": email})
         if cur.rowcount:
-            token = sign_token({"email": email, "reset_datetime": cur.fetchone[0]}, salt="set_password")
+            token = sign_token({"email": email, "reset_datetime": cur.fetchone()[0]}, salt="set_password")
             path = url_for("Auth.set_password", token=token)
             host = dict(request.headers)["Host"]
             link = f"https://{host}{path}"
@@ -456,14 +456,14 @@ def twofactor(token):
     
     kwargs = {"token": token["token"]} if token else {}
     secret = base64.b32encode(os.urandom(10)).decode("utf-8")
-    qrcode_url = url_for(".qrcode", email=email, secret=secret, **kwargs)
+    image = url_for(".qrcode", email=email, secret=secret, **kwargs)
     form.secret.data = secret
     
     buttons = {"submit": (_("Save"), url_for(".twofactor", referrer2=referrer, **kwargs))}
     if "id" in session:
         buttons["back"] = (_("Back"), referrer)
     title = _("Please scan QR code with the Authenticator App on your smartphone.")
-    return render_page("twofactor.html", form=form, buttons=buttons, qrcode_url=qrcode_url, title=title)
+    return render_page("form.html", form=form, buttons=buttons, image=image, title=title)
 
 
 
