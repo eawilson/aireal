@@ -77,35 +77,3 @@
 
 
 
-{% macro render_modal(modal) %}
-    <div id="modal" class="modal">
-        <div id="modal-background" class="modal-background"></div>
-        <div class="modal-content">
-            <div class="box">
-                <div>{{ modal.text }}</div>
-                {% if modal.submit %}<input class="button is-link" type="submit" value="{{ modal.submit[0] }}" formaction="{{ modal.submit[1] }}">{% endif %}
-                {% if modal.back %}<button id="modal-cancel" class="button is-link">{{ modal.back[0] }}</a>{% endif %}
-            </div>
-        </div>
-    </div>
-{% endmacro %}
-
-
-
-{% macro modal_script() %}
-    $('#submit-button').click (function () {
-        $('#modal').addClass('is-active');
-        return false;
-        });
-    $('#modal-cancel').click (function () {
-        $('#modal').removeClass('is-active');
-        return false;
-        });
-    $('#modal-background').click (function () {
-        $('#modal').removeClass('is-active');
-        return false;
-        });
-{% endmacro %}
-        
-
-

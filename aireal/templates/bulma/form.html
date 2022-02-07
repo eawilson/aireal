@@ -15,6 +15,8 @@
         {% if buttons.submit %}<input id="submit-button" class="button is-link" type="submit" value="{{ buttons.submit[0] }}" formaction="{{ buttons.submit[1] }}">{% endif %}
         {% if buttons.back %}<a id="back-button" class="button is-link" href="{{ buttons.back[1] }}">{{ buttons.back[0] }}</a>{% endif %}
         {% if buttons.danger %}<input id="danger-button" class="button is-danger is-pulled-right" type="submit" value="{{ buttons.danger[0] }}" formaction="{{ buttons.danger[1] }}">{% endif %}
+        
+        {% include "bulma/modal.html" %}
     </form>
     
     <p class="help is-danger">{{ form.error }}</p>

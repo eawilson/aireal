@@ -63,5 +63,7 @@
         <input id="action" type="hidden" name="action" value="">
         {% if buttons.submit %}<input id="submit-button" class="button is-link" type="submit" value="{{ buttons.submit[0] }}" form="table-form" formaction="{{ buttons.submit[1] }}">{% endif %}
         {% if buttons.back %}<a id="back-button" class="button is-link" href="{{ buttons.back[1] }}">{{ buttons.back[0] }}</a>{% endif %}
+        
+        {% include "bulma/modal.html" %}
     </form>
 {% endblock %}

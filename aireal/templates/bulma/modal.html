@@ -1,0 +1,17 @@
+
+{% if warning %}
+    <script src="{{ url_for('static', filename='js/modal.js') }}" defer></script>
+    
+    <div id="modal" class="modal">
+        <div id="modal-background" class="modal-background"></div>
+        
+        <div class="modal-content">
+            <div class="box">
+                <div>{{ warning }}</div>
+
+                {% if buttons.submit %}<input id="modal-submit" class="button is-link" type="submit" value="{{ buttons.submit[0] }}" formaction="{{ buttons.submit[1] }}">{% endif %}
+                {% if buttons.cancel %}<button id="modal-cancel" class="button is-link" href="{{ buttons.cancel[1] }}">{{ buttons.cancel[0] }}</a>{% endif %}
+            </div>
+        </div>
+    </div>
+{% endif %}

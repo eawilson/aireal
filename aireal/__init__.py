@@ -3,8 +3,11 @@ import sys
 import glob
 from datetime import date
 import pdb
+
 from flask import Flask
 from flask.json.tag import JSONTag
+from werkzeug.middleware import proxy_fix
+from werkzeug.routing import BaseConverter
 
 from psycopg2.extras import Json
 from psycopg2.pool import ThreadedConnectionPool
@@ -66,6 +69,12 @@ def create_app(instance_path="."):
         app.session_interface.serializer.register(TagDate)
     except KeyError:
         pass
+    
+    class CSVMatch(BaseConverter):
+        regex = r".+,.*"
+
+    app.url_map.converters["csv"] = CSVMatch
+    
     if not app.debug:
         app.config.update(SESSION_COOKIE_SECURE=True,
                           SESSION_COOKIE_HTTPONLY=True,
@@ -80,7 +89,10 @@ def create_app(instance_path="."):
             response.headers['X-Frame-Options'] = 'SAMEORIGIN'
             response.headers['X-XSS-Protection'] = '1; mode=block'
             return response
-
+    
+    if "PROXY_FIX" in app.config:
+        app = ProxyFix(app, **app.config["PROXY_FIX"])
+    
     i18n_init(app)
 
     from .auth import app as auth

@@ -11,8 +11,8 @@ import requests
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "--auth-file", help="Path to write authentication url to.", required=True)
-    parser.add_argument("-a", "--api-server", help="URL of BaseSpace authentication server.", required=True)
     parser.add_argument("-c", "--callback", help="URL of callback to be made at completion to update database.", required=True)
+    parser.add_argument("-a", "--api-server", help="URL of BaseSpace authentication server.", required=True)
     parser.add_argument("-s", "--scopes", help="List of scopes to authenticate with.", required=True)
     args = parser.parse_args()
     

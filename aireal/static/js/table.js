@@ -8,7 +8,7 @@
         const url = new URL(window.location.href);
         const hide = JSON.parse(sessionStorage.getItem("hide")) || {};
 
-        function toggle() {
+        function toggleShowHide() {
             hide[url.pth] = !hide[url.path];
             updateTable();
             sessionStorage.setItem("hide", JSON.stringify(hide));
@@ -32,24 +32,46 @@
             }
         
         updateTable();
-        showHide.addEventListener('click', toggle);
+        showHide.addEventListener('click', toggleShowHide);
         }
     
     
     
     const master = document.getElementById('master-checkbox');
-    
+    const checkBoxes = document.querySelectorAll('input[type=checkbox]:enabled');
+   
     if (master) {
-        function checkall(e) {
-            const target = e.target;
-            const checkboxes = document.querySelectorAll('input[type=checkbox]:enabled');
-            
-            for (var i = 0; i < checkboxes.length; ++i) {
-                checkboxes[i].checked = target.checked;
+        function toggleSubmit(e) {
+            for (var i = 0; i < checkBoxes.length; ++i) {
+                if (checkBoxes[i].checked) {
+                    document.getElementById('submit-button').disabled = false;
+                    return;
+                    }
+                document.getElementById('submit-button').disabled = true;
                 }
             }
         
-        master.addEventListener('click', checkall);
+        function checkall(e) {
+            const target = e.target;
+            
+            for (var i = 0; i < checkBoxes.length; ++i) {
+                checkBoxes[i].checked = target.checked;
+                }
+            
+            toggleSubmit();
+            }
+        
+        for (var i = 0; i < checkBoxes.length; ++i) {
+            if (checkBoxes[i] === master) {
+                checkBoxes[i].addEventListener('change', checkall);
+                }
+            else {
+                checkBoxes[i].addEventListener('change', toggleSubmit);
+                }
+                
+            }
+
+        toggleSubmit();
         }
     
     })();

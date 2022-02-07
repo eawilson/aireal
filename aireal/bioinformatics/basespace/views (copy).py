@@ -1,117 +1,152 @@
 import os
 import uuid
 import shlex
-from itertools import chain
-from collections import defaultdict, OrderedDict
+import subprocess
+import time
+import requests
+import re
+from html import escape, unescape
+
 import pdb
 
-from flask import session, redirect, url_for, request, send_file, current_app
+from flask import session, redirect, url_for, request, current_app
 from werkzeug.exceptions import Conflict, Forbidden, BadRequest, NotFound
+from jinja2 import Markup
 
-from .basespace import Session, Session2
-from .forms import ServerForm#, SelectSamplesForm
-
+from psycopg2.extras import execute_batch
 
 from ...flask import abort, render_page, render_template, Blueprint, sign_token, absolute_url_for
 from ...utils import Cursor, Transaction, tablerow, iso8601_to_utc
 from ...i18n import _
 from ...wrappers import Local
+from .forms import ServerForm
 
 
-app = Blueprint("Basespace", __name__, url_prefix="/basespace", role="Bioinformatics", template_folder="templates")
+trim_lane_regex = re.compile("_L[0-9]{3}$")
+
+
+app = Blueprint("Basespace", __name__, role="Bioinformatics", template_folder="templates")
+
+
+
+def bs_get(url, token, params={}):
+    try:
+        response = requests.get(url,
+                                params=params, 
+                                headers={"x-access-token": token},
+                                stream=True)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException:
+        pass # need to add proper handling
+    except requests.exceptions.JSONDecodeError:
+        pass
 
 
 
 @app.route("/accounts")
 def accounts():
     with Cursor() as cur:
-        sql = """SELECT bsaccount.id, bsaccount.name, bsserver.region
+        sql = """SELECT bsaccount.id, bsaccount.name, bsserver.region, bsserver.country
                  FROM bsaccount
-                 JOIN users_bsaccount ON bsaccount.id = users_bsaccount.bsaccount_id
+                 JOIN bsaccount_users ON bsaccount.id = bsaccount_users.bsaccount_id
                  JOIN bsserver ON bsserver.id = bsaccount.bsserver_id
-                 WHERE users_bsaccount.users_id = %(users_id)s
+                 WHERE bsaccount_users.users_id = %(users_id)s
                  ORDER BY bsaccount.name;"""
         body = []
         cur.execute(sql, {"users_id": session["id"]})
-        for bsaccount_id, bsaccount_name, bsserver_region in cur:
+        for bsaccount_id, bsaccount_name, region, country in cur:
             body.append(((bsaccount_name,
-                          bsserver_region),
+                          "{} ({})".format(region, _(country))),
                           {"id": bsaccount_id}))
     
-    actions = ({"name": _("Select"), "href": url_for(".runs", account_id=0)},)
+    actions = ({"name": _("Select"), "href": url_for(".bsruns", account_id=0)},)
     table = {"head": (_("Account"), _("Region")),
              "body": body,
+             "showhide": False,
+             "actions": actions,
              "new": url_for(".new_account")}
     return render_page("table.html", table=table, title=_("BaseSpace"), buttons=())
+    _("USA")
+    _("Canada")
+    _("Europe")
+    _("UK")
+    _("China")
+    _("Australia")
 
 
 
 @app.route("/accounts/new", methods=["GET", "POST"])
 def new_account():
-     with Cursor() as cur:
-        sql = """SELECT bsserver.id, bsserver.url, bsserver.region
+    with Cursor() as cur:
+        sql = """SELECT bsserver.id, bsserver.url, bsserver.region, bsserver.country
                  FROM bsserver
                  ORDER BY bsserver.region;"""
         cur.execute(sql)
         id_choices = []
         urls = {}
-        for bsserver_id, bsserver_url, bsserver_region in cur:
-            id_choices.append((bsserver_id, bsserver_region))
+        for bsserver_id, bsserver_url, region, country in cur:
+            id_choices.append((bsserver_id, "{} ({})".format(region, _(country))))
             urls[bsserver_id] = bsserver_url
     
     form = ServerForm(request.form if request.method == "POST" else {})
     form.bsserver_id.choices = id_choices
     
-    text = []
-    buttons = {"back": (_("Back"), url_back())}
+    buttons = {"back": (_("Back"), url_for(".accounts"))}
 
     if request.method == "POST" and form.validate():
-        auth_file = os.path.join(current_app.instance_path, "bsauth-{}".format(uuid.uuid4())
-        token = sign_token({"users_id": session["id"], "bsserver_id": form.bsserver_id.data}, salt="basespace_callback")
-        callback = absolute_url_for(".basespace_callback", token=token)
+        auth_file = os.path.join(current_app.instance_path, "bsauth-{}".format(uuid.uuid4()))
+        token = sign_token({"users_id": session["id"], "bsserver_id": form.bsserver_id.data}, salt="authorisation_callback")
+        callback = absolute_url_for(".authorisation_callback", token=token)
         
         cmd = ["setsid", "bsauth", "--auth-file", auth_file,
                                    "--callback", callback,
                                    "--api-server", urls[form.bsserver_id.data],
-                                   "--scopes", "Read Global, Browse Global",
-                                   ">/dev/null", "2>&1", "</dev/null", "&"]
-        subprocess.run(shlex.join(cmd), shell=True)
+                                   "--scopes", "Read Global, Browse Global"]
+        # Probably cleaner to use subprocess redirection but I am certain this does what I want
+        shell_cmd = " ".join(shlex.quote(arg) for arg in cmd) + " >/dev/null 2>&1 </dev/null &"
+        subprocess.run(shell_cmd, shell=True)
         
-        for _ in range(20):
+        for i in range(50):
             try:
                 with open(auth_file) as f_in:
                     auth_url = f_in.read()
                 if auth_url.endswith("\n"):
                     if auth_url.startswith("Please go to this URL to authenticate:"):
                         auth_url = auth_url[38:].strip()
-                        text = ["{} {}".format(_("Please go to this URL to authenticate:"), auth_url),
+                        link = render_template("link.html", text=auth_url, url=auth_url, external=True)
+                        text = [Markup("{} {}".format(_("Please go to this URL to authenticate:"), link)),
                                 _("For BaseSpace Enterprise please ensure you are logged into the the correct workgroup before following link.")]
-                        buttons["external"] = (_("BaseSpace"), auth_url)
                     else:
                         text = ["{} {}".format(_("ERROR:"), auth_url.strip())]
                     break
             except FileNotFoundError:
-                sleep(0.1)
+                time.sleep(0.1)
         else:
             text = [_("ERROR: Unable to communicate with BaseSpace authentication process.")]
+        
+        return render_page("basespace_auth.html", text=text, buttons=buttons)
     
-    return render_page("basespace_auth.html", form=form, text=text, buttons=buttons)
+    else:
+        title = _("Please select the region that the account is hosted in")
+        buttons["submit"] = (_("Next"), url_for(".new_account"))
+        return render_page("form.html", title=title, form=form, buttons=buttons)
+    
 
 
-
-@app.route("/callback/<string:token>", signature="basespace_callback", max_age=3*60, methods=["POST"])
-def basespace_callback(token):
+@app.route("/callback/authorisation/<string:token>", signature="authorisation_callback", max_age=60*60, methods=["POST"])
+def authorisation_callback(token):
     with Transaction() as trans:
         with trans.cursor() as cur:
             sql = """INSERT INTO bsaccount (bsid, name, token, bsserver_id)
                      VALUES (%(bsid)s, %(name)s, %(token)s, %(bsserver_id)s)
                      ON CONFLICT ON CONSTRAINT uq_bsaccount_bsid_bsserver_id
-                     DO UPDATE SET name=%(name)s, token=%(token)s
+                     DO UPDATE SET name = %(name)s, token = %(token)s
                      RETURNING id;"""
-            cur.execute(sql, {"bsserver_id": token["bsserver_id"], **requests.form})
-            bsaccount_id = cursor.fetchone()[0]
+            cur.execute(sql, {"bsserver_id": token["bsserver_id"], **request.form})
+            bsaccount_id = cur.fetchone()[0]
             
-            sql = """INSERT INTO users_bsaccount (users_id, bsaccount_id)
+            sql = """INSERT INTO bsaccount_users (users_id, bsaccount_id)
                      VALUES (%(users_id)s, %(bsaccount_id)s)
                      ON CONFLICT DO NOTHING;"""
             cur.execute(sql, {"users_id": token["users_id"], "bsaccount_id": bsaccount_id})
@@ -120,357 +155,343 @@ def basespace_callback(token):
 
 
 @app.route("/accounts/<int:account_id>/runs")
-def runs(account_id):
+def bsruns(account_id):
     with Cursor() as cur:
-        sql = """SELECT bsaccount.name, bsaccount.token, bsserver.url
+        sql = """SELECT bsaccount.name, bsaccount.token, bsserver.url, bsserver.id
                  FROM bsaccount
-                 JOIN users_bsaccount ON users_bsaccount.bsaccount_id = bsaccount.id
+                 JOIN bsaccount_users ON bsaccount_users.bsaccount_id = bsaccount.id
                  JOIN bsserver ON bsserver.id = bsaccount.bsserver_id
-                 WHERE bsaccount.id = %(account_id)s AND users_bsaccount.users_id = %(users_id)s;"""
+                 WHERE bsaccount.id = %(account_id)s AND bsaccount_users.users_id = %(users_id)s;"""
         cur.execute(sql, {"account_id": account_id, "users_id": session["id"]})
-        title, token, server_url = cur.fetchone() or abort(exceptions.BadRequest)
-
-        sql = """SELECT bsrun.bsid, bsrun.attr, bsrun.num_total, bsrun.num_uploaded
-                 FROM bsrun
-                 JOIN bsaccount_bsrun ON bsaccount_bsrun.bsrun_id = bsrun.id
-                 WHERE bsaccount_bsrun.bsaccount_id = %(account_id)s
-                 ORDER BY bsruns.attr->>'DateModified' DESC;"""
-        cur.execute(sql, {"account_id": account_id})
-        old_rows = list(cur)
-        
-    new_rows = []
-    # Don't repeat the expensive search for new runs if going backwards
-    if request.args.get("dir", "0") != "-1":
-        bs = Session(token)
-        last_modified = old_rows[0][1]["DateModified"] if old_rows else None
-        for attr in bs.search("runs", query="(experimentname:*)", SortBy="DateModified", SortDir="Desc"):
-            if last_modified and attr["DateModified"] <= last_modified:
-                break
-            print(attr["ExperimentName"])
-            bsrun_bsid = int(attr["Id"])
-            try:
-                attr = bs.get_single(f"runs/{bsrun_bsid}")
-            # Insufficient permissions! Should not have been found in the first place!
-            except RuntimeError: 
-                continue
-            new_rows.append((bsrun_bsid, attr, None, None))
-
-        with conn.begin():
-            for row in new_rows:
-                trans = conn.begin_nested()
-                try:
-                    bsrun_id = conn.execute(bsruns.insert().values(**row)).inserted_primary_key[0]
-                    conn.execute(bsaccounts_bsruns.insert().values(bsrun_id=bsrun_id, bsaccount_id=account_id))
-                    trans.commit()
-                except IntegrityError:
-                    trans.rollback()
-                    
-                    bsrun_id = conn.execute(select([bsruns.c.id]).where(bsruns.c.bsid == row["bsid"])).scalar()
-                    conn.execute(bsruns.update().where(bsruns.c.id == bsrun_id).values(**row))
-                    trans = conn.begin_nested()
-                    try:
-                        conn.execute(bsaccounts_bsruns.insert().values(bsrun_id=bsrun_id, bsaccount_id=account_id))
-                        trans.commit()
-                    except IntegrityError:
-                        trans.rollback()
-
-    body = []
-    for bsid, attr, num_uploaded, num_total in sorted(chain(new_rows, old_rows), key=lambda x:x[1]["DateModified"], reverse=True):
-        utcdate = iso8601_to_utc(attr["DateCreated"])
-        if num_total is not None and num_uploaded is not None:
-            uploaded = f"{num_uploaded} / {num_total}"
-        else:
-            uploaded = ""
-        if attr["Status"] == "Complete":
-            url = url_fwrd(".samples", account_id=account_id, bsrun_bsid=attr["Id"])
-        else:
-            url = None
-        body.append(tablerow(attr["ExperimentName"],
-                             attr["InstrumentType"],
-                             attr["InstrumentName"],
-                             attr["Status"],
-                             Local(utcdate),
-                             uploaded,
-                             href=url))
+        account, token, bsserver, bsserver_id = cur.fetchone() or abort(BadRequest)
     
-    tabs = ({"text": "Runs", "active": True}, {"text": "Projects", "href": url_for(".projectlist", account_id=account_id)})
-    table = {"head": (_("Name"), _("Platform"), _("Machine"), _("Status"), _("Date"), _("Uploaded")),
-             "body": body}
-    return render_page("table.html",
-                       title=title,
-                       table=table,
-                       buttons={"back": (_("Back"), url_back())},
-                       tabs=tabs)
+    query = bs_get(f"{bsserver}/v2/search", token, params={"scope": "runs",
+                                                           "query": "(experimentname:*)",
+                                                           "offset": 0,
+                                                           "limit": 10,
+                                                           "SortBy": "DateCreated",
+                                                           "SortDir": "Desc"})
+    paging = query["Paging"]
+    displayed_count = paging["DisplayedCount"]
+    total_count = paging["TotalCount"]
+    offset = paging["Offset"]
+    
+    body = []
+    values = []
+    for item in query["Items"]:
+        item = item["Run"]
+        experimentname = item["ExperimentName"]
+        bsid = item["Id"]
+        status = item["Status"]
+        seqstats = item["SequencingStats"]
+        body.append(((experimentname,
+                      item["InstrumentType"],
+                      item["InstrumentName"],
+                      "{:.2f}%".format(seqstats["PercentGtQ30"]),
+                      "{:.2f}%".format(seqstats["PercentPf"] * 100),
+                      #"{:.2f}%".format(seqstats["ClusterDensity"]),
+                      status,
+                      Local(iso8601_to_utc(item["DateCreated"]))),
+                      {"id": bsid} if status == "Complete" else {}))
+        values.append({"bsserver_id": bsserver_id,
+                       "bsid": bsid, 
+                       "name": experimentname,
+                       "status": status,
+                       "datetime_bsmodified": iso8601_to_utc(item["DateModified"])})
+    
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            sql = """INSERT INTO bsrun (bsserver_id, bsid, name, status, datetime_bsmodified)
+                     VALUES (%(bsserver_id)s, %(bsid)s, %(name)s, %(status)s, %(datetime_bsmodified)s)
+                     ON CONFLICT ON CONSTRAINT uq_bsrun_bsid_bsserver_id
+                     DO UPDATE SET datetime_bsmodified = %(datetime_bsmodified)s, status = %(status)s;"""
+            execute_batch(cur, sql, values)
+    
+    actions = ({"name": _("Select"), "href": url_for(".bsappsessions", account_id=account_id, bsrun_bsid=0)},)
+    table = {"head": (_("Name"), _("Platform"), _("Machine"), _("Avg %Q30"), _("%PF"), _("Status"), _("Created")),
+             "body": body,
+             "showhide": False,
+             "actions": actions,
+             "breadcrumbs": ((_("Accounts"), url_for(".accounts"), False), (account, url_for(".bsruns", account_id=account_id), True))}
+    return render_page("table.html", table=table, buttons=())
 
 
 
-@app.route("/runs/<int:account_id>/<int:bsrun_bsid>/samples", methods=["GET", "POST"])
-def samples(account_id, bsrun_bsid):
-    with engine.connect() as conn:
-        sql = select([bsaccounts.c.token,
-                      bsruns.c.id.label("bsrun_id"),
-                      bsruns.c.attr.label("run_attr"),
-                      bsruns.c.num_total,
-                      bsappsessions.c.attr.label("appsession_attr"),
-                      bssamples.c.id.label("bssample_id"),
-                      bssamples.c.name,
-                      bssamples.c.reads_pf,
-                      bssamples.c.status,
-                      bssamples.c.upload_datetime,
-                      projects.c.name.label("project"),
-                      users.c.name.label("user")]). \
-                select_from(join(bsaccounts, users_bsaccounts, bsaccounts.c.id == users_bsaccounts.c.bsaccount_id). \
-                            join(bsaccounts_bsruns, bsaccounts_bsruns.c.bsaccount_id == bsaccounts.c.id). \
-                            join(bsruns, bsaccounts_bsruns.c.bsrun_id == bsruns.c.id). \
-                            outerjoin(bsappsessions, bsappsessions.c.bsrun_id == bsruns.c.id). \
-                            outerjoin(bssamples, bssamples.c.bsappsession_id == bsappsessions.c.id). \
-                            outerjoin(projects, projects.c.id == bssamples.c.project_id). \
-                            outerjoin(users, users.c.id == bssamples.c.user_id)). \
-                where(and_(bsruns.c.bsid == bsrun_bsid,
-                           bsaccounts_bsruns.c.bsaccount_id == account_id,
-                           users_bsaccounts.c.user_id == session["id"])). \
-                order_by(bsappsessions.c.attr["DateCreated"].desc())
-        old_rows = list(dict(row) for row in conn.execute(sql)) or abort(BadRequest)
-        row = old_rows[0]
-        if not row["appsession_attr"]:
-            old_rows = []
+@app.route("/accounts/<int:account_id>/runs/<int:bsrun_bsid>", methods=["GET", "POST"])
+def bsappsessions(account_id, bsrun_bsid):
+    with Cursor() as cur:
+        sql = """SELECT bsaccount.name, bsaccount.token, bsserver.url, bsserver.id, bsrun.name, bsrun.datetime_bsmodified, bsrun.datetime_modified, bsrun.id
+                 FROM bsaccount
+                 JOIN bsaccount_users ON bsaccount_users.bsaccount_id = bsaccount.id
+                 JOIN bsserver ON bsserver.id = bsaccount.bsserver_id
+                 JOIN bsrun ON bsrun.bsserver_id = bsaccount.bsserver_id
+                 WHERE bsaccount.id = %(account_id)s AND bsaccount_users.users_id = %(users_id)s AND bsrun.bsid = %(bsrun_bsid)s AND bsrun.status = 'Complete';"""
+        cur.execute(sql, {"account_id": account_id, "users_id": session["id"], "bsrun_bsid": str(bsrun_bsid)})
+        account, token, bsserver, bsserver_id, experimentname, datetime_bsmodified, datetime_modified, bsrun_id = cur.fetchone() or abort(BadRequest)
+    
+    if datetime_modified is None or datetime_bsmodified > datetime_modified:
+        query = bs_get(f"{bsserver}/v2/runs/{bsrun_bsid}", token)
+        with Transaction() as trans:
+            with trans.cursor() as cur:
+                sql = """UPDATE bsrun 
+                         SET datetime_bsmodified = %(datetime_bsmodified)s, attr = %(attr)s, datetime_modified = current_timestamp
+                         WHERE id = %(bsrun_id)s;"""
+                cur.execute(sql, {"bsrun_id": bsrun_id, "datetime_bsmodified": query["DateModified"], "attr": query})    
+    
+    
+    query = bs_get(f"{bsserver}/v2/appsessions", token, params={"input.runs": bsrun_bsid,
+                                                                "offset": 0,
+                                                                "limit": 10,
+                                                                "SortBy": "DateCreated",
+                                                                "SortDir": "Desc"})
+    paging = query["Paging"]
+    displayed_count = paging["DisplayedCount"]
+    total_count = paging["TotalCount"]
+    offset = paging["Offset"]
+    body = []
+    values = []
+    for item in query["Items"]:
+        bsid = item["Id"]
+        status = item["ExecutionStatus"]
+        name = item["Application"]["Name"]
+        body.append(((name,
+                      status,
+                      "{:.2f}GB".format(item.get("TotalSize", 0) / 1000000000),
+                      Local(iso8601_to_utc(item["DateCreated"]))),
+                      {"id": item["Id"]} if status == "Complete" else {}))
+        values.append({"bsserver_id": bsserver_id,
+                       "bsrun_id": bsrun_id, 
+                       "bsid": bsid, 
+                       "name": name,
+                       "status": status,
+                       "datetime_bsmodified": iso8601_to_utc(item["DateModified"])})
+    
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            sql = """INSERT INTO bsappsession (bsserver_id, bsrun_id, bsid, name, status, datetime_bsmodified)
+                     VALUES (%(bsserver_id)s, %(bsrun_id)s, %(bsid)s, %(name)s, %(status)s, %(datetime_bsmodified)s)
+                     ON CONFLICT ON CONSTRAINT uq_bsappsession_bsid_bsserver_id
+                     DO UPDATE SET datetime_bsmodified = %(datetime_bsmodified)s, status = %(status)s;"""
+            execute_batch(cur, sql, values)
+    
+    #if TotalCount == 1 and query["Items"][0]["ExecutionStatus"] == "Complete":
+        #bsappsession_bsid = query["Items"][0]["Id"]
+        #return redirect(url_for(".bsdatasets", account_id=account_id, bsrun_bsid=bsrun_bsid, bsappsession_bsid=bsappsession_bsid))
+
+    actions = ({"name": _("Select"), "href": url_for(".bsdatasets", account_id=account_id, bsrun_bsid=bsrun_bsid, bsappsession_bsid=0)},)
+    table = {"head": (_("Application"), _("Status"), _("Size"), _("Created")),
+             "body": body,
+             "showhide": False,
+             "actions": actions,
+             "breadcrumbs": ((_("Accounts"), url_for(".accounts"), False), 
+                             (account, url_for(".bsruns", account_id=account_id), False),
+                             (experimentname, url_for(".bsappsessions", account_id=account_id, bsrun_bsid=bsrun_bsid), True))}
+    return render_page("table.html", table=table, buttons=())
+
+
+
+@app.route("/accounts/<int:account_id>/runs/<int:bsrun_bsid>/appsessions/<int:bsappsession_bsid>")
+def bsdatasets(account_id, bsrun_bsid, bsappsession_bsid):
+    with Cursor() as cur:
+        sql = """SELECT bsaccount.name, bsaccount.token, bsserver.url, bsserver.id, bsrun.name, bsappsession.id, bsappsession.datetime_bsmodified, bsappsession.datetime_modified
+                 FROM bsaccount
+                 JOIN bsaccount_users ON bsaccount_users.bsaccount_id = bsaccount.id
+                 JOIN bsserver ON bsserver.id = bsaccount.bsserver_id
+                 JOIN bsrun ON bsrun.bsserver_id = bsaccount.bsserver_id
+                 JOIN bsappsession ON bsappsession.bsrun_id = bsrun.id
+                 WHERE bsaccount.id = %(account_id)s AND bsaccount_users.users_id = %(users_id)s AND bsrun.bsid = %(bsrun_bsid)s
+                 AND bsappsession.bsid = %(bsappsession_bsid)s AND bsappsession.status = 'Complete';"""
+        cur.execute(sql, {"account_id": account_id, "users_id": session["id"], "bsrun_bsid": str(bsrun_bsid), "bsappsession_bsid": str(bsappsession_bsid)})
+        account, token, bsserver, bsserver_id, experimentname, bsappsession_id, datetime_bsmodified, datetime_modified = cur.fetchone() or abort(BadRequest)
+
+    query = bs_get(f"{bsserver}/v2/appsessions/{bsappsession_bsid}", token)
+    properties = query["Properties"]["Items"]
+    stale_bsappsession = datetime_modified is None or datetime_bsmodified > datetime_modified
+    
+    if stale_bsappsession:
+        for prop in properties:
+            if prop["Name"] == "Logs.Tail":
+                # Illumina what the f**k are you doing! Nul bytes in a string!!! Really!!!!
+                prop["Content"] = prop["Content"].replace("\x00", "").replace("\x01", "")
         
-        bsrun_id = row["bsrun_id"]
-        experimentname = row["run_attr"]["ExperimentName"]
-        current_appsession_bsid = None
-        if old_rows:
-            current_appsession_bsid = row["appsession_attr"]["Id"]
-        
-        # Should alter to get 0 / 0 if no appsessions.
-        new_rows = []
-        if row["num_total"] is None:
-            bs2 = Session2(row["token"])
-            new_appsessions = OrderedDict()
-            for appsession_attr in bs2.get_multiple("appsessions", params={"input.runs": bsrun_bsid, "sortby": "DateCreated", "sortdir": "Desc"}):
-                print(appsession_attr["Name"])
-                appsession_bsid = appsession_attr["Id"]
-                if appsession_bsid == current_appsession_bsid:
-                    break
-                
-                if appsession_attr["ExecutionStatus"] == "Complete":
-                    sample_datasets = defaultdict(list)
-                    appsession_attr = bs2.get_single(f"appsessions/{appsession_bsid}")
-                    for prop in appsession_attr["Properties"]["Items"]:
-                        
-                        if prop["Name"] == "Logs.Tail":
-                            # Illumina what the f**k are you doing! Nul bytes in a string!!! Really!!!!
-                            prop["Content"] = prop["Content"].replace("\x00", "").replace("\x01", "")
-                        
-                        if prop["Name"] == "Output.Datasets":
-                            for dataset_attr in prop["DatasetItems"]:
-                                print(dataset_attr["Name"])
-                                if "common_fastq" not in dataset_attr["Attributes"]:
-                                    # log error
-                                    continue
-                                
-                                if  dataset_attr["Name"][-5:-3] != "_L":
-                                    # log error
-                                    continue
-                                    
-                                name = dataset_attr["Name"][:-5]
-                                sample_datasets[name] += [dataset_attr]
-                            
-                    new_appsessions[appsession_bsid] = [appsession_attr, sample_datasets]
-                
-            if new_appsessions:
-                with conn.begin() as trans:
-                    num_total = 0
-                    for current_appsession_bsid, attr_samples in new_appsessions.items():
-                        num_total = len(attr_samples[1])
-                        break
-                    sql = bsruns.update().where(bsruns.c.id == bsrun_id).values(num_total=num_total, num_uploaded=0)
-                    conn.execute(sql)
-                        
-                    for appsession_attr, datasets in new_appsessions.values():
-                        sql = bsappsessions.insert().values(bsid=appsession_attr["Id"],
-                                                            bsrun_id=bsrun_id,
-                                                            attr=appsession_attr)
-                        bsappsession_id = conn.execute(sql).inserted_primary_key[0]
-                        
-                        for name, attrs in datasets.items():
-                            reads_pf = 0
-                            for attr in attrs:
-                                reads_pf += attr["Attributes"]["common_fastq"]["TotalReadsPF"]
-                
-                            sql = bssamples.insert().values(bsappsession_id=bsappsession_id, name=name, reads_pf=reads_pf)
-                            bssample_id = conn.execute(sql).inserted_primary_key[0]
-                            values = [{"bsid": attr["Id"], "bssample_id": bssample_id, "attr": attr} for attr in attrs]
-                            conn.execute(bsdatasets.insert().values(values))
-
-                            new_rows += [{"appsession_attr": appsession_attr,
-                                        "bssample_id": bssample_id,
-                                        "name": name,
-                                        "reads_pf": reads_pf}]
-
-
-        form = SelectSamplesForm(request.form)
-        invalid_bssample_ids = set()
-        body = []
-        for row in chain(new_rows, old_rows):
-            appsession_attr = row["appsession_attr"]
-            utcdate = iso8601_to_utc(appsession_attr["DateCreated"])
-            obsolete = appsession_attr["Id"] != current_appsession_bsid
-            choice = [row["bssample_id"], ""]
-            if obsolete or row.get("status", "") != "":
-                choice += ["disabled"]
-                invalid_bssample_ids.add(choice[0])
-            checkbox = form.bssample_ids.checkbox(choice)
-            body += [tablerow(row["name"],
-                              row["reads_pf"],
-                              appsession_attr["Application"]["Name"],
-                              Local(utcdate),
-                              row.get("project", "") or "",
-                              row.get("status", "") or "",
-                              Local(row.get("upload_datetime", None)),
-                              deleted=obsolete,
-                              checkbox=checkbox)]
-        
-        project = session.get("project", None)
-        if request.method == "POST" and form.validate():
-            if not project:
-                form.error = _("Project must be selected before uploading.")
+        with Transaction() as trans:
+            with trans.cursor() as cur:
+                sql = """UPDATE bsappsession 
+                         SET datetime_bsmodified = %(datetime_bsmodified)s, attr = %(attr)s, datetime_modified = current_timestamp
+                         WHERE id = %(bsappsession_id)s;"""
+                cur.execute(sql, {"bsappsession_id": bsappsession_id, "datetime_bsmodified": query["DateModified"], "attr": query})    
+    
+    items = []
+    for prop in properties:
+        if prop["Name"] == "Output.Datasets":
+            if prop["ItemsDisplayedCount"] == prop["ItemsTotalCount"]:
+                items = prop["DatasetItems"]
             else:
-                selected_bssample_ids = set(form.bssample_ids.data) - invalid_bssample_ids
-                sql = bssamples.update(). \
-                        where(and_(bssamples.c.id.in_(selected_bssample_ids), bssamples.c.status == "")). \
-                        values(project_id=session["project_id"],
-                               user_id=session["id"],
-                               status="Queued")
-                #conn.execute(sql)
-                
-                # Update uploaded obsolete files.
-                # Wake daemon.
-                    
-                print(selected_bssample_ids)
-                return redirect(url_for(".samples", account_id=account_id, bsrun_bsid=bsrun_bsid))
+                # Does not specify sort direction in Output.Datasets therefore search from beginning again to be safe.
+                total = prop["ItemsTotalCount"]
+                url = f"https://api.basespace.illumina.com/v2/appsessions/{bsappsession_bsid}/properties/Output.Datasets/items"
+                while len(items) < total:
+                    response = bs_get(url, token, params={"offset": len(items), "SortBy": "DateCreated", "SortDir": "Desc"})
+                    for item in response["Items"]:
+                        items.append(item["Dataset"])
     
-    table = {"head": (_("Sample"), _("Reads PF"), _("Application"), _("Date"), _("Project"), _("Status"), _("Date")),
-             "body": body}
-    if project:
-        msg = _("Are you sure you want to upload these samples to {}?").format(project)
-        button = (_("Import"), url_for(".samples", account_id=account_id, bsrun_bsid=bsrun_bsid))
-        modal = {"back": (_("Back"), url_back()), "text": msg, "submit": button} 
-    else:
-        modal = None
-    buttons = {"submit": (_("Import"), "#"), "back": (_("Cancel"), url_back())}
-    return render_page("formtable.html",
-                       form=form,
-                       title=experimentname,
-                       table=table,
-                       buttons=buttons,
-                       modal=modal)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-@app.route("/accounts/<int:account_id>/projects")
-def projectlist(account_id):
-    with engine.connect() as conn:
-        sql = select([bsaccounts.c.name, bsaccounts.c.token, bsprojects.c.bsid, bsprojects.c.attr, bsprojects.c.num_total, bsprojects.c.num_uploaded]). \
-                select_from(join(bsaccounts, users_bsaccounts, bsaccounts.c.id == users_bsaccounts.c.bsaccount_id). \
-                            outerjoin(bsaccounts_bsprojects, bsaccounts_bsprojects.c.bsaccount_id == bsaccounts.c.id). \
-                            outerjoin(bsprojects, bsaccounts_bsprojects.c.bsproject_id == bsprojects.c.id)). \
-                where(and_(bsaccounts.c.id == account_id, users_bsaccounts.c.user_id == session["id"])). \
-                order_by(bsprojects.c.attr["DateModified"].desc())
-        old_rows = list(dict(row) for row in conn.execute(sql)) or abort(BadRequest)
-        row = old_rows[0]
-        last_modified = row["attr"]["DateModified"] if row["attr"] is not None else None
-        account = row["name"]
-        bs = Session(row["token"])
-        if row["bsid"] is None:
-            old_rows = []
-
-        #pdb.set_trace()
-        new_rows = []
-        # Don't repeat the expensive search for new runs if going backwards
-        if request.args.get("dir", "0") != "-1":
-            for attr in bs.get_multiple("users/current/projects"):
-                pdb.set_trace()
-                if last_modified and attr["DateModified"] <= last_modified:
-                    break
-                bsproject_bsid = int(attr["Id"])
-                try:
-                    attr = bs.get_single(f"projects/{bsrun_bsid}")
-                # Insufficient permissions! Should not have been found in the first place!
-                except RuntimeError: 
-                    continue
-                new_rows += [{"attr": attr, "bsid": bsproject_bsid, "num_total": None, "num_uploaded": None}]
-
-            with conn.begin():
-                for row in new_rows:
-                    trans = conn.begin_nested()
-                    try:
-                        bsrun_id = conn.execute(bsprojects.insert().values(**row)).inserted_primary_key[0]
-                        conn.execute(bsaccounts_bsprojects.insert().values(bsrun_id=bsrun_id, bsaccount_id=account_id))
-                        trans.commit()
-                    except IntegrityError:
-                        trans.rollback()
-                        
-                        bsrun_id = conn.execute(select([bsprojects.c.id]).where(bsprojects.c.bsid == row["bsid"])).scalar()
-                        conn.execute(bsprojects.update().where(bsprojects.c.id == bsrun_id).values(**row))
-                        trans = conn.begin_nested()
-                        try:
-                            conn.execute(bsaccounts_bsprojects.insert().values(bsrun_id=bsrun_id, bsaccount_id=account_id))
-                            trans.commit()
-                        except IntegrityError:
-                            trans.rollback()
-
     body = []
-    for row in sorted(chain(new_rows, old_rows), key=lambda x:x["attr"]["DateModified"], reverse=True):
-        attr = row["attr"]
-        utcdate = iso8601_to_utc(attr["DateCreated"])
-        if row.get("num_total", None) is not None and row.get("num_uploaded", None) is not None:
-            uploaded = "{} / {}".format(row["num_uploaded"], row["num_total"])
+    values = []
+    items.sort(key=lambda p:p["Name"])
+    for item in items:
+        name = item["Name"]
+        if not trim_lane_regex.search(name):
+            # If name doe not have a lane suffix then assume it is a composite dataset containing the combined datasets
+            # for each of the individual dataset from each lane. WARNING - This assumption may not be future proof but
+            # I can see no other way of doing it other than for checking for unique names or etags within the files
+            # and this would significantly increase the number of api calls and reduce responsivness.
+            continue
+        
+        lane = int(name[-3:])
+        name = name[:-5]
+        
+        if body and body[-1][0][1] == name:
+            prev_row = body[-1][0]
+            prev_row[2] = "{},{}".format(prev_row[2], lane)
+            prev_row[3] += item["Attributes"].get("common_fastq", {}).get("TotalReadsPF", 0)
+            prev_row[4] += item.get("TotalSize", 0)
         else:
-            uploaded = ""
-        if attr["Status"] == "Complete":
-            url = url_fwrd(".samples", account_id=account_id, bsrun_bsid=attr["Id"])
-        else:
-            url = None
-        body += [tablerow(attr["ExperimentName"],
-                        attr["InstrumentType"],
-                        attr["InstrumentName"],
-                        attr["Status"],
-                        Local(utcdate),
-                        uploaded,
-                        href=url)]
+            body.append(([Markup(render_template("checkbox.html", form="table-form", name=escape(name))),
+                         name,
+                         lane,
+                         item["Attributes"].get("common_fastq", {}).get("TotalReadsPF", 0),
+                         item.get("TotalSize", 0),
+                         Local(iso8601_to_utc(item["DateCreated"]))],{}))
+        if stale_bsappsession:
+            values.append({"bsserver_id": bsserver_id,
+                           "bsappsession_id": bsappsession_id,
+                           "bsid": str(item["Id"]), 
+                           "name": name,
+                           "attr": item,
+                           "lane": lane,
+                           "datetime_bsmodified": iso8601_to_utc(item["DateModified"])})
     
-    tabs = ({"text": "Runs", "active": True}, {"text": "Projects", "href": url_for(".runs", account_id=account_id)})
-    table = {"head": (_("Name"), _("Platform"), _("Machine"), _("Status"), _("Date"), _("Uploaded")),
-             "body": body}
-    return render_page("table.html",
-                       title=account,
-                       table=table,
-                       buttons={"back": (_("Back"), url_back())},
-                       tabs=tabs)
+    for row in body:
+        row[0][4] = "{:.2f}GB".format(row[0][3] / 1000000000)
+    
+    if values:
+        with Transaction() as trans:
+            with trans.cursor() as cur:
+                sql = """INSERT INTO bsdataset (bsserver_id, bsappsession_id, bsid, name, attr, lane, datetime_modified, datetime_bsmodified)
+                         VALUES (%(bsserver_id)s, %(bsappsession_id)s, %(bsid)s, %(name)s, %(attr)s, %(lane)s, current_timestamp, %(datetime_bsmodified)s)
+                         ON CONFLICT ON CONSTRAINT uq_bsdataset_bsid_bsserver_id
+                         DO UPDATE SET datetime_bsmodified = %(datetime_bsmodified)s, attr = %(attr)s, datetime_modified = current_timestamp
+                         WHERE bsdataset.datetime_modified < %(datetime_bsmodified)s;"""
+                execute_batch(cur, sql, values)
+    
+    
+    here = url_for(".bsdatasets", account_id=account_id, bsrun_bsid=bsrun_bsid, bsappsession_bsid=bsappsession_bsid)
+    back = url_for(".bsappsessions", account_id=account_id, bsrun_bsid=bsrun_bsid)
+    buttons = {"submit": (_("Import"), url_for(".bsdatasets_import", account_id=account_id, bsrun_bsid=bsrun_bsid, bsappsession_bsid=bsappsession_bsid)), 
+               "back": (_("Back"), back), 
+               "cancel": (_("Cancel"), here)}
+    table = {"head": (Markup(render_template("checkbox.html", master=True)), _("Name"), _("Lanes"), _("Reads PF"), _("Size"), _("Created")),
+             "body": body,
+             "showhide": False,
+             "breadcrumbs": ((_("Accounts"), url_for(".accounts"), False), 
+                             (account, url_for(".bsruns", account_id=account_id), False),
+                             (experimentname, back, False),
+                             (query["Application"]["Name"], here, True))}
+    return render_page("table.html", table=table, buttons=buttons, warning="Are you sure you want to import these files?")
+
+
+
+@app.route("/accounts/<int:account_id>/runs/<int:bsrun_bsid>/appsessions/<int:bsappsession_bsid>/datasets", methods=["POST"])
+def bsdatasets_import(account_id, bsrun_bsid, bsappsession_bsid):
+
+    csrf_validated = False
+    dataset_names = []
+    for key, val in request.form.items():
+        key = unescape(key)
+        if key == "csrf" and val == session["csrf"]:
+            csrf_validated = True
+        else:
+            dataset_names.append(key)
+
+    if csrf_validated:
+        with Cursor() as cur:
+            sql = """SELECT bsaccount.token, bsserver.url, bsappsession.name, bsappsession.id, bsdataset.attr
+                     FROM bsaccount
+                     JOIN bsaccount_users ON bsaccount_users.bsaccount_id = bsaccount.id
+                     JOIN bsserver ON bsserver.id = bsaccount.bsserver_id
+                     JOIN bsrun ON bsrun.bsserver_id = bsaccount.bsserver_id
+                     JOIN bsappsession ON bsappsession.bsrun_id = bsrun.id
+                     JOIN bsdataset ON bsdataset.bsappsession_id = bsappsession.id
+                     WHERE bsaccount.id = %(account_id)s AND bsaccount_users.users_id = %(users_id)s AND bsrun.bsid = %(bsrun_bsid)s
+                     AND bsappsession.bsid = %(bsappsession_bsid)s AND bsappsession.status = 'Complete' AND bsdataset.name IN %(selected_names)s;"""
+            cur.execute(sql, {"account_id": account_id,
+                              "users_id": session["id"], 
+                              "bsrun_bsid": str(bsrun_bsid), 
+                              "bsappsession_bsid": str(bsappsession_bsid),
+                              "selected_names": tuple(dataset_names)})
+            
+            files = {}
+            for token, bsserver, name, appsession_id, attr in cur:
+                # This function only receives data from a single appsession therefore name will always uniquely identify a sample
+                if name in files:
+                    files[name]["files_href"].append(attr["HrefFiles"])
+                else:
+                    callback_token = sign_token({"bsappsession_id": bsappsession_id,
+                                                 "name": name,
+                                                 "users_id": session["id"],
+                                                 "project_id": session["project_id"]}, salt="import_callback")
+                    callback = absolute_url_for(".import_callback", token=callback_token)
+                    files[name] = {"files_href": [attr["HrefFiles"]],
+                                   "bsserver": bsserver,
+                                   "token": token,
+                                   "import_url": "",
+                                   "callback": callback}
+                
+    return redirect(url_for(".bsdatasets", account_id=account_id, bsrun_bsid=bsrun_bsid, bsappsession_bsid=bsappsession_bsid))
+    
+
+
+@app.route("/callback/import/<string:token>", signature="import_callback", max_age=60*60, methods=["POST"])
+def import_callback(token):
+    return {}
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            sql = """INSERT INTO bsimported_sample (bsappsession_id, name, users_id, project_id, datetime_modified, status)
+                     VALUES (%(bsappsession_id)s, %(name)s, %(users_id)s, %(project_id)s, current_timestamp, %(status)s)
+                     ON CONFLICT ON CONSTRAINT uq_bsimported_sample_bsappsession_id_name
+                     DO UPDATE SET users_id = %(users_id)s, project_id = %(project_id)s, datetime_modified = current_timestamp, status = %(status)s;"""
+            cur.execute(sql, {**token, **request.form})
+            
+            sql = """INSERT INTO analysis ()
+                     VALUES ()
+                     RETURNING id;"""
+            cur.execute(sql, {})
+            analysis_id = cur.fetchone()[0]
+            
+            sql = """INSERT INTO audittrail (action, target, name, keyvals, users_id, ip_address)
+                     VALUES ('Import', 'BaseSpace', %(runsample)s, %(keyvals)s, %(users_id)s, %(ip_address)s)
+                     RETURNING id;"""
+            cur.execute(sql, {"runsample": token["runsample"],
+                              "keyvals": {"Status": request.form["status"], "Project": ""}, 
+                              "users_id": token["users_id"], 
+                              "ip_address": token["ip_address"]})
+            audittrail_id = cur.fetchone()[0]
+            
+            sql = """INSERT INTO auditlink (audittrail_id, tablename, row_id)
+                     VALUES (%(audittrail_id)s, %(tablename)s, %(row_id)s)
+                     ON CONFLICT DO NOTHING;"""
+            values = [{"audittrail_id": audittrail_id, "tablename": "appsession", "row_id": token["appsession_id"]},
+                      {"audittrail_id": audittrail_id, "tablename": "analysis", "row_id": analysis_id}]
+            execute_batch(cur, sql, values)
+    return {}
+
+
+
+
+
+
+
+
 
 
 
