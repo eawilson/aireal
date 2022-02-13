@@ -1,4 +1,6 @@
 import pdb
+import os
+import glob
 from functools import wraps, partial
 from urllib.parse import urlparse, urlunparse, parse_qs, unquote_plus, urlencode
 from collections import defaultdict, ChainMap, namedtuple
@@ -28,7 +30,9 @@ __all__ = ["Blueprint",
            "navbar",
            "sign_cookie",
            "unique_key",
-           "iso8601_to_utc"]
+           "iso8601_to_utc",
+           "config_file",
+           "load_config"]
 
 
 
@@ -236,5 +240,23 @@ def query_parameter(key, numeric=False):
     return param
 
 
+
+def config_file(instance_path):
+    config_files = glob.glob(os.path.join(instance_path, "*.cfg"))
+    if len(config_files) == 0:
+        sys.exit(f"No configuration file found in {instance_path}")
+    elif len(config_files) > 1:
+        sys.exit(f"Multiple configuration files found in {instance_path}")
+    else:
+        return config_files[0]
+
+
+
+
+def load_config(config_path):
+    config = {}
+    with open(config_path, "rt") as f:
+        exec(f.read(), config)
+    return config
 
 

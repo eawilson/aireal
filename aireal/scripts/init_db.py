@@ -26,19 +26,21 @@ def main():
             if fn.endswith(".sql"):
                 path = os.path.join(root, fn)
                 hierarchy.append((len(path.split("/")), path))
-
-    app = aireal.create_app(args.path)
-    with app.test_request_context():
-        with aireal.utils.Transaction() as trans:
-            with trans.cursor() as cur:
-                for i, path in sorted(hierarchy):
-                    print(path, file=sys.stderr)
-                    with open(path) as f_in:
-                        sql = f_in.read()
-                    try:
-                        cur.execute(sql)
-                    except psycopg2.Error as e:
-                        sys.exit(e)
+    
+    config = load_config(config_file(args.instance_path))
+    if "DB_URI" not in config:
+        sys.exit("No DB_URI within config file")
+    
+    with psycopg2.connect(config["DB_URI"]) as conn:
+        with conn.cursor() as cur:
+            for i, path in sorted(hierarchy):
+                print(path, file=sys.stderr)
+                with open(path) as f_in:
+                    sql = f_in.read()
+                try:
+                    cur.execute(sql)
+                except psycopg2.Error as e:
+                    sys.exit(e)
 
 
 

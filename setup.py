@@ -30,7 +30,7 @@ setup(name="aireal",
                       "boto3"],
     entry_points = { "console_scripts":
         ["waitress_serve=aireal.scripts.waitress_serve:main",
-         "bsauth=aireal.bioinformatics.basespace.bsauth:main"]},
+         "bsauth=aireal.bioinformatics.basespace.bsauth:main",
          "bsimport=aireal.bioinformatics.basespace.bsimport:main"]},
     message_extractors = {"aireal":
         [("**.py", "python", None),
