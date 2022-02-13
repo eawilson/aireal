@@ -17,7 +17,7 @@ def main():
         empty database and cannot be used to perform migrations.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("path", help="Path to instance folder containing the config file with database connection uri.")    
+    parser.add_argument("instance_path", help="Path to instance folder containing the config file with database connection uri.")    
     args = parser.parse_args()
     
     hierarchy = []
