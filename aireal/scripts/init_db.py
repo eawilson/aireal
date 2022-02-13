@@ -27,7 +27,7 @@ def main():
                 path = os.path.join(root, fn)
                 hierarchy.append((len(path.split("/")), path))
     
-    config = load_config(config_file(args.instance_path))
+    config = aireal.load_config(aireal.config_file(args.instance_path))
     if "DB_URI" not in config:
         sys.exit("No DB_URI within config file")
     
