@@ -35,6 +35,8 @@ class LocationForm(Form):
 class ProjectForm(Form):
     def definition(self):
         self.name = TextInput(_("Name"))
+        self.fastq_s3_path = TextInput(_("S3 path to fastqs"))
+        self.fastq_command_line = TextInput(_("Command line for fastq analysis"))
         #self.subject_attr = TextInput(_("Subject Attributes"), required=False)
         #self.collection_attr = TextInput(_("Sample Attributes"), required=False)
         #self.pipeline_id = SelectInput(_("Default Pipeline"), required=False)

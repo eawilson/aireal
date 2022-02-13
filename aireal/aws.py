@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from botocore.signers import CloudFrontSigner
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, BotoCoreError
 from botocore.config import Config
 
 from flask import current_app
@@ -29,14 +29,13 @@ __all__ = [
     "run_task"]
 
 
+# Caching to reduce need for repeated api calls. They
 task_definitions = {}
-
+preferred_subnet = ""
 
 
 def ec2_metadata():
-    """ Get metadata about current running instance. This has only been tested
-        a single network interface and would be expected to fail if there were
-        multiple interfaces.
+    """ Get metadata about current running instance.
     """
     BASE_URL = "http://169.254.169.254/latest"
     metadata = {}
@@ -52,26 +51,31 @@ def ec2_metadata():
     session.headers.update({"X-aws-ec2-metadata-token": response.text})
     
     
-    response = session.get(f"{BASE_URL}/meta-data/placement/region",
+    response = session.get(f"{BASE_URL}/meta-data/placement/availability-zone",
                            timeout=2.0)
     if response.status_code == 200:
-        metadata["AWS_REGION"] = response.text
-    
-    response = session.get(f"{BASE_URL}/meta-data/mac",
-                           timeout=2.0)
-    if response.status_code == 200:
-        mac = response.text
-        response = session.get(f"{BASE_URL}/meta-data/network/interfaces/macs/{mac}/subnet-id",
-                           timeout=2.0)
-        if response.status_code == 200:
-            metadata["AWS_SUBNET"] = response.text
-
-        response = session.get(f"{BASE_URL}/meta-data/network/interfaces/macs/{mac}/subnet-ipv4-cidr-block",
-                           timeout=2.0)
-        if response.status_code == 200:
-            metadata["LOCAL_SUBNET"] = response.text
-
+        metadata["AWS_AVAILABILITY_ZONE"] = response.text
+        metadata["AWS_REGION"] = response.text[:-1]
+        
     return metadata
+    #response = session.get(f"{BASE_URL}/meta-data/placement/region",
+                           #timeout=2.0)
+    #if response.status_code == 200:
+        #metadata["AWS_REGION"] = response.text
+    
+    #response = session.get(f"{BASE_URL}/meta-data/mac",
+                           #timeout=2.0)
+    #if response.status_code == 200:
+        #mac = response.text
+        #response = session.get(f"{BASE_URL}/meta-data/network/interfaces/macs/{mac}/subnet-id",
+                           #timeout=2.0)
+        #if response.status_code == 200:
+            #metadata["AWS_SUBNET"] = response.text
+
+        #response = session.get(f"{BASE_URL}/meta-data/network/interfaces/macs/{mac}/subnet-ipv4-cidr-block",
+                           #timeout=2.0)
+        #if response.status_code == 200:
+            #metadata["LOCAL_SUBNET"] = response.text
 
 
 
@@ -191,37 +195,70 @@ def object_exists(bucket, path):
 def run_task(task, command):
     """ 
     """
-    client = boto3.client("ecs")
-    subnet = current_app.config["AWS_SUBNET"]
+    global preferred_subnet
+    config = current_app.config
+    availability_zone = config.get("AWS_AVAILABILITY_ZONE", "") OR config.get("AWS_REGION", "") + "a"
     
-    for tries in (0, 1):
-        if task in task_definitions:
-            response = client.run_task(
-                launchType = "FARGATE",
-                taskDefinition = task_definitions[task],
-                networkConfiguration = {
-                    "awsvpcConfiguration": {
-                        "subnets": ["subnet-038d89f677b086a80"],
-                        "assignPublicIp": "ENABLED",
-                        }
-                    },
-                overrides = {
-                    "containerOverrides": [{
-                            "name": task,
-                            "command": command,
-                            }],
-                    "taskRoleArn": "arn:aws:iam::387676495311:role/Deepzoom",
-                    }
-                )
-            print(response)
+    ecs = boto3.client("ecs")
+    #subnet = current_app.config["AWS_SUBNET"]
 
-        if task not in task_definitions and tries == 0:
-            response = client.list_task_definitions(familyPrefix=task)
-            if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
-                # Sorted asc so latest definition appears last
-                for arn in response["taskDefinitionArns"]:
-                    name = arn.split("/")[-1].split(":")[0]
-                    task_definitions[name] = arn
+    for tries in (0, 1):
+        if task in task_definitions and preferred_subnet:
+            try:
+                response = ecs.run_task(
+                    taskDefinition = task_definitions[task],
+                    launchType = "FARGATE",
+                    networkConfiguration = {
+                        "awsvpcConfiguration": {
+                            "subnets": [preferred_subnet],
+                            "assignPublicIp": "ENABLED",
+                            }
+                        },
+                    overrides = {
+                        "containerOverrides": [{
+                                "name": task,
+                                "command": command,
+                                }],
+                        }
+                    )
+                if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
+                    break
+            except BotoCoreError:
+                pass
+        
+        if tries == 0: 
+            response = None
+            next_token = {}
+            while response is None or "nextToken" in response:
+                response = ecs.list_task_definitions(**next_token)
+                next_token = {"nextToken": response.get("nextToken", "")}
+                if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
+                    # Sorted asc so latest definition appears last
+                    for arn in response["taskDefinitionArns"]:
+                        name = arn.split("/")[-1].split(":")[0]
+                        task_definitions[name] = arn
+            
+            if preferred_subnet == "":
+                next_best_subnet = any_subnet = ""
+                response = None
+                next_token = {}
+                while response is None or "nextToken" in response:
+                    ec2 = boto3.client("ec2")
+                    response = ec2.describe_subnets(**next_token)
+                    next_token = {"nextToken": response.get("nextToken", "")}
+                    if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
+                        # Sorted asc so latest definition appears last
+                        for subnet in response["Subnets"]:
+                            for tag in subnet.get("Tags", ()):
+                                if tag["Key"] == "Name" and tag["Value"].startswith("ECS default "):
+                                    if subnet["AvailabilityZone"] == availability_zone:
+                                        preferred_subnet = subnet["SubnetId"]
+                                    elif subnet["AvailabilityZone"][:-1] == availability_zone[:-1]:
+                                        next_best_subnet = subnet["SubnetId"]
+                                    else:
+                                        any_subnet = subnet["SubnetId"]
+                                    break
+                preferred_subnet = preferred_subnet or next_best_subnet or any_subnet
     
     
     

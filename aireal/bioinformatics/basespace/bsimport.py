@@ -11,7 +11,7 @@ from collections import defaultdict
 import requests
 
 import boto3
-
+from botocore.exceptions import ClientError
 
 
 trim_lane_regex = re.compile("_L[0-9]{3}$")
@@ -26,15 +26,15 @@ def bs_get(url, token, params={}):
 
 
 def stream_upload(s3_client, download, bucket, key):
-    ###
-    ###
+    """
+    """
     
     # download is a Response object from the requests package
-    chunked_download = download.iter_content(chunk_size=8 * 1024 * 1024) # 1MB
+    chunked_download = download.iter_content(chunk_size=8*1024*1024) # 8MB
     
     response = s3_client.create_multipart_upload(Bucket=bucket, Key=key)
     if response["ResponseMetadata"]["HTTPStatusCode"] != 200:
-        raise
+        raise RuntimeError("")
     
     upload_id = response['UploadId']
     file_obj = io.BytesIO()
@@ -46,7 +46,7 @@ def stream_upload(s3_client, download, bucket, key):
             file_obj.truncate()
             
             n_bytes = 0
-            while n_bytes < 1024 * 1024 * 1024: # 1GB
+            while n_bytes < 512 * 1024 * 1024: # 0.5GB
                 try:
                     n_bytes += file_obj.write(next(chunked_download))
                 except StopIteration:
@@ -57,22 +57,49 @@ def stream_upload(s3_client, download, bucket, key):
             content_length = file_obj.tell()
             file_obj.seek(0)
             response = s3_client.upload_part(Body=file_obj,
-                                          Bucket=bucket, 
-                                          Key=key,
-                                          ContentLength=content_length,
-                                          PartNumber=len(parts) + 1,
-                                          UploadId=upload_id)
+                                             Bucket=bucket, 
+                                             Key=key,
+                                             ContentLength=content_length,
+                                             PartNumber=len(parts) + 1,
+                                             UploadId=upload_id)
             parts.append({"ETag": response["ETag"], "PartNumber": len(parts) + 1})
             
         response = s3_client.complete_multipart_upload(Bucket=bucket,
-                                                    Key=key,
-                                                    MultipartUpload={'Parts': parts},
-                                                    UploadId=upload_id)
+                                                       Key=key,
+                                                       MultipartUpload={'Parts': parts},
+                                                       UploadId=upload_id)
     except Exception:
         response = s3_client.abort_multipart_upload(Bucket=bucket,
-                                                 Key=key,
-                                                 UploadId=upload_id)
+                                                    Key=key,
+                                                    UploadId=upload_id)
         raise
+
+
+
+def s3_exists(s3_client, bucket, key, size=None):
+    try:
+        response = s3_client.head_object(Bucket=bucket, Key=key)
+        if size is None or response["ContentLength"] == size:
+            return True
+    except ClientError:
+        pass
+    return False
+
+
+
+def file_exists(path, size=None):
+    return os.path.exists(path) and (size is None or os.path.getsize(path) == size)
+
+
+
+def post(url, data={}):
+    print(data, file=sys.stderr)
+    requests.post(url, data=data)
+
+
+
+def dont_post(url, data={}):
+    print(data, file=sys.stderr)
 
 
 
@@ -83,12 +110,14 @@ def main():
     parser.add_argument("-t", "--token", help="BaseSpace authentication token.", required=True)
     parser.add_argument("-a", "--appsession-bsid", help="BaseSpace id of the appsessionn responsible for creating the fastqs to be imported.", required=True)
     parser.add_argument("-o", "--output-dir", help="Path to write imported fastqs to <output-dir>/<experimentname>/<appsession-datecompleted>/<samplename>/<file.fastq>.", required=True)
-    parser.add_argument("-c", "--callback", help="URL of the callback to be made at completion to update database.", default=None, required=False)
+    parser.add_argument("-c", "--callback", help="URL of the callback to be made to report progress.", default=None, required=False)
     args = parser.parse_args()
+    
+    callback = post if args.callback else dont_post
     
     S3_OUTPUT = args.output_dir[:5].lower() == "s3://"
     if S3_OUTPUT:
-        s3_bucket, s3_prefix = args.output_dir[5:].split("/", maxsplit=2)
+        s3_bucket, s3_prefix = args.output_dir[5:].split("/", maxsplit=1)
         s3_client = boto3.client("s3")
     elif not os.path.isdir(args.output_dir):
         sys.exit(f"output directory {args.output_dir} does not exist")
@@ -101,6 +130,7 @@ def main():
     experimentname = "<EXPERIMENTNAME>"
     datasets = []
     for prop in appsession["Properties"]["Items"]:
+        
         if prop["Name"] == "Input.Runs":
             experimentname = prop["RunItems"][0]["ExperimentName"]
         
@@ -129,37 +159,61 @@ def main():
     for samplename, datasets in samples.items():
         if samplename in args.samplenames:
             for dataset in datasets:
-                remaining = 1
-                offset = 0
-                while remaining:
-                    response = bs_get(dataset["HrefFiles"], args.token, params={"offset": offset, "SortBy": "DateCreated", "SortDir": "Desc"}).json()
-                    paging = response["Paging"]
-                    offset = paging["Offset"]
-                    remaining = paging["TotalCount"] - offset - paging["DisplayedCount"]
-                    for item in response["Items"]:
-                        identifier = [experimentname, appsession_datecompleted, samplename, item["Name"]]
-                        
-                        download = bs_get(item["HrefContent"], args.token)
-                        if S3_OUTPUT:
-                            stream_upload(s3_client, download, s3_bucket, "/".join([s3_prefix] + identifier))
-                        
-                        else:
-                            path = os.path.join(args.output_dir, *identifier)
-                            os.makedirs(os.path.dirname(path), exist_ok=True)
-                            with open(path, "wb") as f_out:
-                                for chunk in download.iter_content(chunk_size=8 * 1024 * 1024): # 8MB
-                                    f_out.write(chunk)
-    
-    #if args.callback:
-        #requests.post(args.callback)
+                try:
+                    remaining = 1
+                    offset = 0
+                    while remaining:
+                        response = bs_get(dataset["HrefFiles"], args.token, params={"offset": offset, "SortBy": "DateCreated", "SortDir": "Desc"}).json()
+                        paging = response["Paging"]
+                        offset = paging["Offset"]
+                        remaining = paging["TotalCount"] - offset - paging["DisplayedCount"]
+                        for item in response["Items"]:
+                            filename = item["Name"]
+                            callback(args.callback, data={"name": samplename, "status": "in-progress", "details": filename})
+                            identifier = [experimentname, appsession_datecompleted, samplename, filename]
+                            
+                            download = bs_get(item["HrefContent"], args.token)
+                            if S3_OUTPUT:
+                                s3_key = "/".join([s3_prefix] + identifier)
+                                if not s3_exists(s3_client, s3_bucket, s3_key, size=item["Size"]):
+                                    print(f"Copying {filename}", file=sys.stderr)
+                                    stream_upload(s3_client, download, s3_bucket, s3_key)
+                                else:
+                                    print(f"Skipping {filename}", file=sys.stderr)
+
+                            else:
+                                path = os.path.join(args.output_dir, *identifier)
+                                if not file_exists(path, size=item["Size"]):
+                                    print(f"Copying {filename}", file=sys.stderr)
+                                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                                    with open(path, "wb") as f_out:
+                                        for chunk in download.iter_content(chunk_size=8*1024*1024): # 8MB
+                                            f_out.write(chunk)
+                                else:
+                                    print(f"Skipping {filename}", file=sys.stderr)
+                
+                except requests.exceptions.HTTPError as e:
+                    callback(args.callback, data={"name": samplename, "status": "failed", "details": e.response.reason})
+                    # Crazy but true. BaseSpace will allow access to some objects (files in this case) in a collection but not when accessed directly.
+                    # We do not really have access to these and they never should have been included in the collection in the first place. Therefore
+                    # ingore and move on to the next sample.
+                    if e.response.status_code == 403:
+                        print(f"Forbidden {samplename}", file=sys.stderr)
+                    else:
+                        raise
+
+                except ClientError as e:
+                    callback(args.callback, data={"name": samplename, "status": "failed", "details": e.response["Error"]["Code"]})
+                    raise
+
+                except Exception as e:
+                    callback(args.callback, data={"name": samplename, "status": "failed", "details": str(e)})
+                    raise
+                
+                else:
+                    callback(args.callback, data={"name": samplename, "status": "complete"})
 
 
 
 if __name__ == "__main__":
-    main();sys.exit()
-    try:
-        main()
-    except OSError as e:
-        # File input/output error. This is not an unexpected error so just
-        # print and exit rather than displaying a full stack trace.
-        sys.exit(str(e))
+    main()

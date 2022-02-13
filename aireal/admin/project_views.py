@@ -34,7 +34,7 @@ def edit_project(project_id):
     with Transaction() as trans:
         with trans.cursor() as cur:
             if project_id is not None:
-                sql = """SELECT id, name, deleted
+                sql = """SELECT id, name, deleted, fastq_s3_path, fastq_command_line
                         FROM project
                         WHERE id = %(project_id)s;"""
                 old = dict_from_select(cur, sql, {"project_id": project_id})

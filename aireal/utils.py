@@ -5,6 +5,8 @@ from functools import wraps
 from collections import defaultdict
 from ipaddress import ip_address, ip_network
 from urllib.parse import urlparse, urlunparse, parse_qs, unquote_plus, urlencode
+import shlex
+import subprocess
 
 from dateutil import parser
 import pytz
@@ -33,7 +35,8 @@ __all__ = ["utcnow",
            "render_page",
            "sign_cookie",
            "unique_key",
-           "iso8601_to_utc"]
+           "iso8601_to_utc",
+           "demonise"]
 
 
 
@@ -119,5 +122,23 @@ def tablerow(*args, **kwargs):
 
 def unique_key(e):
     return str(e).split("\nDETAIL:  Key (")[1].split(")")[0]
+
+
+
+def demonise(cmd):
+    """ Runs cmd in the background.
+    
+    Runs shell command in the background, detached from the controlling,
+    tty and unaffected by signals directed at the parent. Cmd must have
+    an alternate method of communication eg filesystem, database or
+    network connection.
+    
+    Args:
+        cmd:
+            Shell command as a list of tokens.
+    """
+    shell_cmd = " ".join(shlex.quote(arg) for arg in cmd)
+    # Possibly cleaner to use subprocess redirection but I am certain this does what I want
+    subprocess.run(f"setsid {shell_cmd} >/dev/null 2>&1 </dev/null &", shell=True)
 
 

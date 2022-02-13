@@ -223,3 +223,18 @@ def flask_cookie(data):
     session_serializer = SecureCookieSessionInterface() \
                          .get_signing_serializer(current_app)
     return session_serializer.dumps(dict(data))
+
+
+
+def query_parameter(key, numeric=False):
+    param = request.args.get(key, "")
+    if numeric:
+        try:
+            param = int(param)
+        except ValueError:
+            param = 0
+    return param
+
+
+
+

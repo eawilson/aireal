@@ -10,13 +10,13 @@ from html import escape, unescape
 import pdb
 
 from flask import session, redirect, url_for, request, current_app
-from werkzeug.exceptions import Conflict, Forbidden, BadRequest, NotFound
+from werkzeug.exceptions import Conflict, Forbidden, BadRequest, NotFound, InternalServerError
 from jinja2 import Markup
 
 from psycopg2.extras import execute_batch
 
-from ...flask import abort, render_page, render_template, Blueprint, sign_token, absolute_url_for
-from ...utils import Cursor, Transaction, tablerow, iso8601_to_utc
+from ...flask import abort, render_page, render_template, Blueprint, sign_token, absolute_url_for, query_parameter
+from ...utils import Cursor, Transaction, tablerow, iso8601_to_utc, demonise
 from ...i18n import _
 from ...wrappers import Local
 from .forms import ServerForm
@@ -111,13 +111,11 @@ def new_account():
         token = sign_token({"users_id": session["id"], "bsserver_id": form.bsserver_id.data}, salt="authorisation_callback")
         callback = absolute_url_for(".authorisation_callback", token=token)
         
-        cmd = ["setsid", "bsauth", "--auth-file", auth_file,
-                                   "--callback", callback,
-                                   "--api-server", urls[form.bsserver_id.data],
-                                   "--scopes", "Read Global, Browse Global"]
-        # Probably cleaner to use subprocess redirection but I am certain this does what I want
-        shell_cmd = " ".join(shlex.quote(arg) for arg in cmd) + " >/dev/null 2>&1 </dev/null &"
-        subprocess.run(shell_cmd, shell=True)
+        cmd = ["bsauth", "--auth-file", auth_file,
+                         "--callback", callback,
+                         "--api-server", urls[form.bsserver_id.data],
+                         "--scopes", "Read Global, Browse Global"]
+        demonise(cmd)
         
         for i in range(50):
             try:
@@ -169,40 +167,49 @@ def authorisation_callback(token):
 @app.route("/accounts/<int:account_id>/runs")
 def bsruns(account_id):
     account, server, token = credentials(account_id) or abort(BadRequest)
+    run_offset = query_parameter("run_offset", numeric=True)
     query = bs_get(f"{server}/v2/search", token, params={"scope": "runs",
                                                            "query": "(experimentname:*)",
-                                                           "offset": 0,
+                                                           "offset": run_offset,
                                                            "limit": 10,
                                                            "SortBy": "DateCreated",
                                                            "SortDir": "Desc"})
-    paging = query["Paging"]
-    displayed_count = paging["DisplayedCount"]
-    total_count = paging["TotalCount"]
-    offset = paging["Offset"]
     
     body = []
     for item in query["Items"]:
         item = item["Run"]
         status = item["Status"]
-        seqstats = item["SequencingStats"]
+        seqstats = item.get("SequencingStats", {}) # Not present if uploading
         experimentname = item["ExperimentName"]
         bsid = item["Id"]
         body.append(((experimentname,
                       item["InstrumentType"],
                       item["InstrumentName"],
-                      "{:.2f}%".format(seqstats["PercentGtQ30"]),
-                      "{:.2f}%".format(seqstats["PercentPf"] * 100),
-                      int(seqstats["ClusterDensity"] / 1000) or "",
+                      "{:.2f}%".format(seqstats["PercentGtQ30"]) if seqstats else "",
+                      "{:.2f}%".format(seqstats["PercentPf"] * 100) if seqstats else "",
+                      (int(seqstats["ClusterDensity"] / 1000) or "") if seqstats else "",
                       status,
                       Local(iso8601_to_utc(item["DateCreated"]))),
                       {"id": f"{bsid}%2C{experimentname}"} if status == "Complete" else {}))
     
-    actions = ({"name": _("Select"), "href": url_for(".bsappsessions", account_id=account_id, run=0)},)
+    actions = ({"name": _("Select"), "href": url_for(".bsappsessions", account_id=account_id, run=0, run_offset=run_offset)},)
     table = {"head": (_("Name"), _("Platform"), _("Machine"), _("Avg %Q30"), _("%PF"), _("Cluster Density"), _("Status"), _("Created")),
              "body": body,
              "showhide": False,
              "actions": actions,
-             "breadcrumbs": ((_("Accounts"), url_for(".accounts"), False), (account, url_for(".bsruns", account_id=account_id), True))}
+             "breadcrumbs": ((_("Accounts"), url_for(".accounts"), False), (account, url_for(".bsruns", account_id=account_id, run_offset=run_offset), True))}
+    
+    paging = query["Paging"]
+    total_count = paging["TotalCount"]
+    if paging["DisplayedCount"] < total_count:
+        pagination = []
+        offset = paging["Offset"]
+        for i in range(0, total_count, 10):
+            pagination.append({"text": str((i // 10) + 1),
+                               "href": url_for(".bsruns", account_id=account_id, run_offset=i),
+                               "current": i <= offset < i + 10})
+        table["pagination"] = pagination
+    
     return render_page("table.html", table=table, buttons=())
 
 
@@ -211,6 +218,7 @@ def bsruns(account_id):
 def bsappsessions(account_id, run):
     run_bsid, experimentname = run.split(",", maxsplit=1)
     account, server, token = credentials(account_id) or abort(BadRequest)
+    run_offset = query_parameter("run_offset", numeric=True)
     query = bs_get(f"{server}/v2/appsessions", token, params={"input.runs": run_bsid,
                                                               "offset": 0,
                                                               "limit": 10,
@@ -231,14 +239,14 @@ def bsappsessions(account_id, run):
                       Local(iso8601_to_utc(item["DateCreated"]))),
                       {"id": item["Id"]} if status == "Complete" else {}))
     
-    actions = ({"name": _("Select"), "href": url_for(".bsdatasets", account_id=account_id, run=run, appsession_bsid=0)},)
+    actions = ({"name": _("Select"), "href": url_for(".bsdatasets", account_id=account_id, run=run, appsession_bsid=0, run_offset=run_offset)},)
     table = {"head": (_("Application"), _("Status"), _("Size"), _("Created")),
              "body": body,
              "showhide": False,
              "actions": actions,
              "breadcrumbs": ((_("Accounts"), url_for(".accounts"), False), 
-                             (account, url_for(".bsruns", account_id=account_id), False),
-                             (experimentname, url_for(".bsappsessions", account_id=account_id, run=run), True))}
+                             (account, url_for(".bsruns", account_id=account_id, run_offset=run_offset), False),
+                             (experimentname, url_for(".bsappsessions", account_id=account_id, run=run, run_offset=run_offset), True))}
     return render_page("table.html", table=table, buttons=())
 
 
@@ -247,6 +255,7 @@ def bsappsessions(account_id, run):
 def bsdatasets(account_id, run, appsession_bsid):
     run_bsid, experimentname = run.split(",", maxsplit=1)
     account, server, token = credentials(account_id) or abort(BadRequest)
+    run_offset = query_parameter("run_offset", numeric=True)
     query = bs_get(f"{server}/v2/appsessions/{appsession_bsid}", token)
     
     datasets = []
@@ -292,10 +301,10 @@ def bsdatasets(account_id, run, appsession_bsid):
                          Local(iso8601_to_utc(item["DateCreated"]))],{}))
     
     for row in body:
-        row[0][4] = "{:.2f}GB".format(row[0][3] / 1000000000)
+        row[0][4] = "{:.2f}GB".format(row[0][4] / 1000000000)
     
-    here = url_for(".bsdatasets", account_id=account_id, run=run, appsession_bsid=appsession_bsid)
-    back = url_for(".bsappsessions", account_id=account_id, run=run)
+    here = url_for(".bsdatasets", account_id=account_id, run=run, appsession_bsid=appsession_bsid, run_offset=run_offset)
+    back = url_for(".bsappsessions", account_id=account_id, run=run, run_offset=run_offset)
     buttons = {"submit": (_("Import"), url_for(".bsdatasets_import", account_id=account_id, run=run, appsession_bsid=appsession_bsid)), 
                "back": (_("Back"), back), 
                "cancel": (_("Cancel"), here)}
@@ -303,7 +312,7 @@ def bsdatasets(account_id, run, appsession_bsid):
              "body": body,
              "showhide": False,
              "breadcrumbs": ((_("Accounts"), url_for(".accounts"), False), 
-                             (account, url_for(".bsruns", account_id=account_id), False),
+                             (account, url_for(".bsruns", account_id=account_id, run_offset=run_offset), False),
                              (experimentname, back, False),
                              (query["Application"]["Name"], here, True))}
     return render_page("table.html", table=table, buttons=buttons, warning="Are you sure you want to import these files?")
@@ -314,6 +323,19 @@ def bsdatasets(account_id, run, appsession_bsid):
                 #prop["Content"] = prop["Content"].replace("\x00", "").replace("\x01", "")
 
 
+
+@app.route("/appsessions/<string:appsession_bsid>/status")
+def bsdatasets_status(appsession_bsid):
+    sql = """SELECT 
+          """
+    
+    run_bsid, experimentname = run.split(",", maxsplit=1)
+    account, server, token = credentials(account_id) or abort(BadRequest)
+    if request.form.get("csrf", "") != session["csrf"]:
+        abort(BadRequest)
+
+
+
 @app.route("/accounts/<int:account_id>/runs/<csv:run>/appsessions/<string:appsession_bsid>/import", methods=["POST"])
 def bsdatasets_import(account_id, run, appsession_bsid):
     run_bsid, experimentname = run.split(",", maxsplit=1)
@@ -321,33 +343,52 @@ def bsdatasets_import(account_id, run, appsession_bsid):
     if request.form.get("csrf", "") != session["csrf"]:
         abort(BadRequest)
     
+    sql = """SELECT fastq_s3_path FROM project WHERE project.id = %(project_id)s;"""
+    with Cursor() as cur:
+        cur.execute(sql, {"project_id": session["project_id"] or 0})
+        fastq_s3_path = (cur.fetchone() or ("",))[0]
+        if not fastq_s3_path.lower().startswith("s3://"):
+            raise InternalServerError("Unable to import. No S3 path available.")
+    
     callback_token = sign_token({"account_id": account_id,
                                  "appsession_bsid": appsession_bsid,
                                  "users_id": session["id"],
-                                 "project_id": session["project_id"]}, salt="import_callback")
+                                 "project_id": session["project_id"],
+                                 "--output-dir": fastq_s3_path}, salt="import_callback")
     callback = absolute_url_for(".import_callback", token=callback_token)
     
     names = [k for k, v in request.form.items() if v == "on"]
     args = names + ["--server", server,
                     "--token", token,
                     "--appsession-bsid", appsession_bsid,
-                    "--output-dir", "zzzz",
+                    "--output-dir", fastq_s3_path,
                     "--callback", callback]
     print(" ".join(shlex.quote(arg) for arg in args))
     return redirect(request.referrer)
-    
+
 
 
 @app.route("/callback/import/<string:token>", signature="import_callback", max_age=24*60*60, methods=["POST"])
 def import_callback(token):
-    return {}
     with Transaction() as trans:
         with trans.cursor() as cur:
-            sql = """INSERT INTO bsimported_sample (bsappsession_id, name, users_id, project_id, datetime_modified, status)
-                     VALUES (%(bsappsession_id)s, %(name)s, %(users_id)s, %(project_id)s, current_timestamp, %(status)s)
-                     ON CONFLICT ON CONSTRAINT uq_bsimported_sample_bsappsession_id_name
-                     DO UPDATE SET users_id = %(users_id)s, project_id = %(project_id)s, datetime_modified = current_timestamp, status = %(status)s;"""
-            cur.execute(sql, {**token, **request.form})
+            sql = """INSERT INTO bsimportedsample (bsappsession_id, name, users_id, project_id, datetime_modified, status, details)
+                     VALUES (%(bsappsession_id)s, %(name)s, %(users_id)s, %(project_id)s, current_timestamp, %(status)s, %(details)s)
+                     ON CONFLICT ON CONSTRAINT uq_bsimportedsample_bsappsession_id_name
+                     DO UPDATE SET users_id = %(users_id)s, project_id = %(project_id)s, datetime_modified = current_timestamp, status = %(status)s, details = %(details)s;"""
+            cur.execute(sql, {"bsappsession_id": token["bsappsession_id"],
+                              "name": request.form["name"],
+                              "users_id": token["users_id"],
+                              "project_id": token["project_id"],
+                              "status": request.form["status"],
+                              "details": request.form["details"]})
+            
+            
+            return{}
+            account, server, token = credentials(token["account_id"]) or abort(BadRequest)
+
+            
+            
             
             sql = """INSERT INTO analysis ()
                      VALUES ()

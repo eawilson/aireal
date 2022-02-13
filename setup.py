@@ -31,6 +31,7 @@ setup(name="aireal",
     entry_points = { "console_scripts":
         ["waitress_serve=aireal.scripts.waitress_serve:main",
          "bsauth=aireal.bioinformatics.basespace.bsauth:main"]},
+         "bsimport=aireal.bioinformatics.basespace.bsimport:main"]},
     message_extractors = {"aireal":
         [("**.py", "python", None),
          ("**/templates/**.html", "jinja2.ext.autoescape,jinja2.ext.with_", None)]},

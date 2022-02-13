@@ -9,12 +9,13 @@ from flask.json.tag import JSONTag
 from werkzeug.middleware import proxy_fix
 from werkzeug.routing import BaseConverter
 
+import psycopg2
 from psycopg2.extras import Json
 from psycopg2.pool import ThreadedConnectionPool
-from psycopg2.extensions import register_adapter
 
 from .i18n import i18n_init
 from .aws import ec2_metadata
+from .version import __version__
 
 
 
@@ -26,9 +27,9 @@ def create_app(instance_path="."):
 
     config_files = glob.glob(os.path.join(instance_path, "*.cfg"))
     if len(config_files) == 0:
-        sys.exit(f"No configuration file found in {instance_path}.")
+        sys.exit(f"No configuration file found in {instance_path}")
     elif len(config_files) > 1:
-        sys.exit(f"Multiple configuration files found in {instance_path}.")
+        sys.exit(f"Multiple configuration files found in {instance_path}")
     else:
         config_file = config_files[0]
 
@@ -49,7 +50,15 @@ def create_app(instance_path="."):
     if "AWS_REGION" in app.config:
         os.environ["AWS_DEFAULT_REGION"] = app.config["AWS_REGION"]
     
-    register_adapter(dict, Json)
+    
+    with psycopg2.connect(config["DB_URI"]) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT version FROM version ORDER BY datetime DESC LIMIT 1;")
+            db_version = cur.fetchone()
+            if not db_version or db_version[0] != __version__:
+                sys.exit(f"Database version does not match application version")
+    
+    psycopg2.extensions.register_adapter(dict, Json)
     app.extensions["connction_pool"] = ThreadedConnectionPool(1, 10, dsn=config["DB_URI"])
     
     class TagDate(JSONTag):

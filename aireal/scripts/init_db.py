@@ -3,6 +3,9 @@
 import argparse
 import os
 import aireal
+import sys
+import pdb
+import psycopg2
 
 
 
@@ -29,16 +32,18 @@ def main():
         with aireal.utils.Transaction() as trans:
             with trans.cursor() as cur:
                 for i, path in sorted(hierarchy):
-                    print(path)
+                    print(path, file=sys.stderr)
                     with open(path) as f_in:
                         sql = f_in.read()
-                    cur.execute(sql)
+                    try:
+                        cur.execute(sql)
+                    except psycopg2.Error as e:
+                        sys.exit(e)
 
 
 
 if __name__ == "__main__":
     main()
-
 
 
     

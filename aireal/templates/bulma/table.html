@@ -46,6 +46,16 @@
         </tbody>
     </table>
     
+    {% if table.pagination %}
+        <nav class="pagination">
+            <ul class="pagination-list">
+                {% for button in table.pagination %}
+                    <li><a class="pagination-link{% if button.current %} is-current{% endif %}" href="{{ button.href }}">{{ button.text }}</a></li>
+                {% endfor %}
+            </ul>
+        </nav>   
+    {% endif %}
+    
     {% if table.actions %}
         <div class="dropdown" id="table-menu{{ table.id }}">
             <div class="dropdown-menu">
@@ -57,7 +67,6 @@
             </div>
         </div>
     {% endif %}
-    
 
     {{ table_form }}
         <input id="action" type="hidden" name="action" value="">
