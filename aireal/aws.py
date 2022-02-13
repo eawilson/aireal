@@ -197,7 +197,7 @@ def run_task(task, command):
     """
     global preferred_subnet
     config = current_app.config
-    availability_zone = config.get("AWS_AVAILABILITY_ZONE", "") OR config.get("AWS_REGION", "") + "a"
+    availability_zone = config.get("AWS_AVAILABILITY_ZONE", "") or (config.get("AWS_REGION", "") + "?")
     
     ecs = boto3.client("ecs")
     #subnet = current_app.config["AWS_SUBNET"]
