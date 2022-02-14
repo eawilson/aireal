@@ -5,7 +5,7 @@ import pdb
 
 from flask import Flask
 from flask.json.tag import JSONTag
-from werkzeug.middleware import proxy_fix
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import BaseConverter
 
 import psycopg2

@@ -16,11 +16,11 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("path", nargs="?", help="path to instance folder containing the config file with database connection uri.", default=".")    
+    parser.add_argument("instance_path", nargs="?", help="path to instance folder containing the config file with database connection uri.", default=".")    
     parser.add_argument("-e", "--email", help="email address of the user to reset.", default="someone@example.com")    
     args = parser.parse_args()
     
-    app = aireal.create_app(args.path)
+    app = aireal.create_app(args.instance_path)
     with app.test_request_context():
         with aireal.utils.Transaction() as trans:
             with trans.cursor() as cur:
