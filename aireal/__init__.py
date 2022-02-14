@@ -90,7 +90,7 @@ def create_app(instance_path="."):
             return response
     
     if "PROXY_FIX" in app.config:
-        app = ProxyFix(app, **app.config["PROXY_FIX"])
+        app.wsgi_app = ProxyFix(app.wsgi_app, **app.config["PROXY_FIX"])
     
     i18n_init(app)
 
