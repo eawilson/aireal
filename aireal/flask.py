@@ -57,7 +57,7 @@ def build_url(*path, **params):
 
 
 def absolute_url_for(*args, **kwargs):
-    return request.host_url[:-1] + url_for(*args, **kwargs)
+    return url_for(*args, _external=True, **kwargs)
 
 
 

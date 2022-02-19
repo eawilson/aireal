@@ -15,6 +15,9 @@ sudo ./aws/install
 rm awscliv2.zip
 sudo rm -rf aws
 
+wget "https://launch.basespace.illumina.com/CLI/latest/amd64-linux/bs" -O bs
+chmod +x bs
+sudo mv bs /usr/local/bin/bs
 
 # NGINX
 sudo apt-get -y install nginx
@@ -78,7 +81,7 @@ http {
 
         location / {
             proxy_pass http://localhost:8080;
-            proxy_set_header Host \$host:\$proxy_port;
+            proxy_set_header Host \$host;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
