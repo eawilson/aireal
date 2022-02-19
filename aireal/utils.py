@@ -99,7 +99,7 @@ def iso8601_to_utc(dt_string):
     """ Convert a string in iso8601 format to a datetime with the timezone set
         to UTC.
     """
-    dt = parser.isoparse(dt_string)
+    dt = parser.parse(dt_string)
     return dt.astimezone(pytz.utc)
 
 
@@ -128,7 +128,7 @@ def unique_key(e):
 def demonise(cmd):
     """ Runs cmd in the background.
     
-    Runs shell command in the background, detached from the controlling,
+    Runs shell command in the background, detached from the controlling
     tty and unaffected by signals directed at the parent. Cmd must have
     an alternate method of communication eg filesystem, database or
     network connection.
