@@ -19,6 +19,7 @@ from ...flask import abort, render_page, render_template, Blueprint, sign_token,
 from ...utils import Cursor, Transaction, tablerow, iso8601_to_utc, demonise
 from ...i18n import _
 from ...wrappers import Local
+from ...aws import run_task
 from .forms import ServerForm
 
 
@@ -256,9 +257,11 @@ def bsdatasets(account_id, run, appsession_bsid):
     run_bsid, experimentname = run.split(",", maxsplit=1)
     account, server, token = credentials(account_id) or abort(BadRequest)
     run_offset = query_parameter("run_offset", numeric=True)
-    query = bs_get(f"{server}/v2/appsessions/{appsession_bsid}", token)
+    
+    statuses = bsdatasets_status(appsession_bsid)
     
     datasets = []
+    query = bs_get(f"{server}/v2/appsessions/{appsession_bsid}", token)
     for prop in query["Properties"]["Items"]:
         if prop["Name"] == "Output.Datasets":
             if prop["ItemsDisplayedCount"] == prop["ItemsTotalCount"]:
@@ -298,7 +301,8 @@ def bsdatasets(account_id, run, appsession_bsid):
                          lane,
                          item["Attributes"].get("common_fastq", {}).get("TotalReadsPF", 0),
                          item.get("TotalSize", 0),
-                         Local(iso8601_to_utc(item["DateCreated"]))],{}))
+                         Local(iso8601_to_utc(item["DateCreated"])),
+                         statuses.get(name, "")],{}))
     
     for row in body:
         row[0][4] = "{:.2f}GB".format(row[0][4] / 1000000000)
@@ -308,9 +312,10 @@ def bsdatasets(account_id, run, appsession_bsid):
     buttons = {"submit": (_("Import"), url_for(".bsdatasets_import", account_id=account_id, run=run, appsession_bsid=appsession_bsid)), 
                "back": (_("Back"), back), 
                "cancel": (_("Cancel"), here)}
-    table = {"head": (Markup(render_template("checkbox.html", master=True)), _("Name"), _("Lanes"), _("Reads PF"), _("Size"), _("Created")),
+    table = {"head": (Markup(render_template("checkbox.html", master=True)), _("Name"), _("Lanes"), _("Reads PF"), _("Size"), _("Created"), _("Import Status")),
              "body": body,
              "showhide": False,
+             "autoupdate": {"key": 1, "value": 6, "href": url_for(".bsdatasets_status", appsession_bsid=appsession_bsid), "miliseconds": 5000},
              "breadcrumbs": ((_("Accounts"), url_for(".accounts"), False), 
                              (account, url_for(".bsruns", account_id=account_id, run_offset=run_offset), False),
                              (experimentname, back, False),
@@ -326,13 +331,26 @@ def bsdatasets(account_id, run, appsession_bsid):
 
 @app.route("/appsessions/<string:appsession_bsid>/status")
 def bsdatasets_status(appsession_bsid):
-    sql = """SELECT 
-          """
-    
-    run_bsid, experimentname = run.split(",", maxsplit=1)
-    account, server, token = credentials(account_id) or abort(BadRequest)
-    if request.form.get("csrf", "") != session["csrf"]:
-        abort(BadRequest)
+    sql = """SELECT users.name, project.name, bsimportedsample.name, bsimportedsample.datetime_modified, bsimportedsample.status, bsimportedsample.details
+             FROM bsimportedsample
+             INNER JOIN project ON project.id = bsimportedsample.project_id
+             INNER JOIN users on users.id = bsimportedsample.users_id
+             WHERE bsimportedsample.bsappsession_bsid = %(appsession_bsid)s;"""
+    with Cursor() as cur:
+        result = {}
+        cur.execute(sql, {"appsession_bsid":appsession_bsid})
+        for user, project, name, datetime_modified, status, details in cur:
+            if status == "in-progress":
+                text = _("Importing {}").format(details)
+            elif ststus == "failed":
+                text = _("Import Failed: {}").format(details)
+            elif status == "complete":
+                text = _("Imported to {}").format(project)
+            else:
+                # Should never happen, but just in case
+                continue
+            result[name] = text
+    return result
 
 
 
@@ -364,12 +382,14 @@ def bsdatasets_import(account_id, run, appsession_bsid):
                     "--output-dir", fastq_s3_path,
                     "--callback", callback]
     print(" ".join(shlex.quote(arg) for arg in args))
+    run_task("bsimport", args)
     return redirect(request.referrer)
 
 
 
 @app.route("/callback/import/<string:token>", signature="import_callback", max_age=24*60*60, methods=["POST"])
 def import_callback(token):
+    status = request.form["status"]
     with Transaction() as trans:
         with trans.cursor() as cur:
             sql = """INSERT INTO bsimportedsample (bsappsession_id, name, users_id, project_id, datetime_modified, status, details)
@@ -380,11 +400,15 @@ def import_callback(token):
                               "name": request.form["name"],
                               "users_id": token["users_id"],
                               "project_id": token["project_id"],
-                              "status": request.form["status"],
+                              "status": status,
                               "details": request.form["details"]})
+            trans.commit()
+            
+            if status != "complete":
+                return {}
             
             
-            return{}
+            return {}
             account, server, token = credentials(token["account_id"]) or abort(BadRequest)
 
             

@@ -4,6 +4,7 @@
     <script src="{{ url_for('static', filename='js/table.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/tablesort.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/tablemenu.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/tableautoupdate.js') }}" defer></script>
     
     <div>
         {% if table.breadcrumbs %}
@@ -26,7 +27,7 @@
         {% if table.new %}<a class="icon" href="{{ table.new }}"><i class="fas fa-plus"></i></a>{% endif %}
     </div>
     
-    <table class="table is-striped is-fullwidth">
+    <table class="table is-striped is-fullwidth{% if table.autoupdate %} autoupdate" data-autoupdate-key="{{ table.autoupdate.key }}" data-autoupdate-value="{{ table.autoupdate.value }}" data-autoupdate-href="{{ table.autoupdate.href }}" data-autoupdate-miliseconds="{{ table.autoupdate.miliseconds }}{% endif %}">
         <thead class="is-sortable">
             <tr>
                 {% for col in table.head %}
