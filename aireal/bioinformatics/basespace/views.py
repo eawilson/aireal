@@ -340,7 +340,9 @@ def bsdatasets_status(appsession_bsid):
         result = {}
         cur.execute(sql, {"appsession_bsid":appsession_bsid})
         for user, project, name, datetime_modified, status, details in cur:
-            if status == "in-progress":
+            if status == "waiting":
+                text = _("Waiting ...").format(details)
+            elif status == "in-progress":
                 text = _("Importing {}").format(details)
             elif status == "failed":
                 text = _("Import Failed: {}").format(details)
@@ -383,6 +385,23 @@ def bsdatasets_import(account_id, run, appsession_bsid):
                     "--callback", callback]
     print(" ".join(shlex.quote(arg) for arg in args))
     retval = run_task("BSImport", args)
+    
+    sql = """INSERT INTO bsimportedsample (bsappsession_bsid, name, users_id, project_id, datetime_modified, status, details)
+                VALUES (%(bsappsession_bsid)s, %(name)s, %(users_id)s, %(project_id)s, current_timestamp, %(status)s, %(details)s)
+                ON CONFLICT ON CONSTRAINT uq_bsimportedsample_bsappsession_id_name
+                DO UPDATE SET users_id = %(users_id)s, project_id = %(project_id)s, datetime_modified = current_timestamp, status = %(status)s, details = %(details)s;"""
+    values = []
+    for name in names:
+        values.append({"bsappsession_bsid": token["appsession_bsid"],
+                        "name": name,
+                        "users_id": session["id"],
+                        "project_id": session["project_id"],
+                        "status": "waiting",
+                        "details": ""})
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            execute_batch(cur, sql, values)
+
     print(retval)
     return redirect(request.referrer)
 
