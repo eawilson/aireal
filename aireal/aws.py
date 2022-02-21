@@ -196,16 +196,18 @@ def run_task(task, command):
     """ 
     """
     global preferred_subnet
+    global task_definitions
     config = current_app.config
     availability_zone = config.get("AWS_AVAILABILITY_ZONE", "") or (config.get("AWS_REGION", "") + "?")
     
     ecs = boto3.client("ecs")
     #subnet = current_app.config["AWS_SUBNET"]
-
+    
     for tries in (0, 1):
+        retval = {}
         if task in task_definitions and preferred_subnet:
             try:
-                response = ecs.run_task(
+                retval = ecs.run_task(
                     taskDefinition = task_definitions[task],
                     launchType = "FARGATE",
                     networkConfiguration = {
@@ -221,7 +223,7 @@ def run_task(task, command):
                                 }],
                         }
                     )
-                if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
+                if retval["ResponseMetadata"]["HTTPStatusCode"] == 200:
                     break
             except BotoCoreError:
                 pass
@@ -260,5 +262,6 @@ def run_task(task, command):
                                     break
                 preferred_subnet = preferred_subnet or next_best_subnet or any_subnet
     
+    return retval
     
     

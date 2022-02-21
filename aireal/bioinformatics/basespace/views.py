@@ -382,7 +382,8 @@ def bsdatasets_import(account_id, run, appsession_bsid):
                     "--output-dir", fastq_s3_path,
                     "--callback", callback]
     print(" ".join(shlex.quote(arg) for arg in args))
-    run_task("bsimport", args)
+    retval = run_task("bsimport", args)
+    print(retval)
     return redirect(request.referrer)
 
 
