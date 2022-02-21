@@ -342,7 +342,7 @@ def bsdatasets_status(appsession_bsid):
         for user, project, name, datetime_modified, status, details in cur:
             if status == "in-progress":
                 text = _("Importing {}").format(details)
-            elif ststus == "failed":
+            elif status == "failed":
                 text = _("Import Failed: {}").format(details)
             elif status == "complete":
                 text = _("Imported to {}").format(project)
