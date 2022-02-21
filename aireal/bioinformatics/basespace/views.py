@@ -402,7 +402,7 @@ def import_callback(token):
                               "users_id": token["users_id"],
                               "project_id": token["project_id"],
                               "status": status,
-                              "details": request.form["details"]})
+                              "details": request.form.get("details", "")})
             trans.commit()
             
             if status != "complete":
