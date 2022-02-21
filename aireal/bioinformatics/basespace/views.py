@@ -393,11 +393,11 @@ def import_callback(token):
     status = request.form["status"]
     with Transaction() as trans:
         with trans.cursor() as cur:
-            sql = """INSERT INTO bsimportedsample (bsappsession_id, name, users_id, project_id, datetime_modified, status, details)
-                     VALUES (%(bsappsession_id)s, %(name)s, %(users_id)s, %(project_id)s, current_timestamp, %(status)s, %(details)s)
+            sql = """INSERT INTO bsimportedsample (bsappsession_bsid, name, users_id, project_id, datetime_modified, status, details)
+                     VALUES (%(bsappsession_bsid)s, %(name)s, %(users_id)s, %(project_id)s, current_timestamp, %(status)s, %(details)s)
                      ON CONFLICT ON CONSTRAINT uq_bsimportedsample_bsappsession_id_name
                      DO UPDATE SET users_id = %(users_id)s, project_id = %(project_id)s, datetime_modified = current_timestamp, status = %(status)s, details = %(details)s;"""
-            cur.execute(sql, {"bsappsession_id": token["bsappsession_id"],
+            cur.execute(sql, {"bsappsession_bsid": token["appsession_bsid"],
                               "name": request.form["name"],
                               "users_id": token["users_id"],
                               "project_id": token["project_id"],
