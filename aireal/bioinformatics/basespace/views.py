@@ -392,7 +392,7 @@ def bsdatasets_import(account_id, run, appsession_bsid):
                 DO UPDATE SET users_id = %(users_id)s, project_id = %(project_id)s, datetime_modified = current_timestamp, status = %(status)s, details = %(details)s;"""
     values = []
     for name in names:
-        values.append({"bsappsession_bsid": token["appsession_bsid"],
+        values.append({"bsappsession_bsid": appsession_bsid,
                         "name": name,
                         "users_id": session["id"],
                         "project_id": session["project_id"],
