@@ -30,14 +30,14 @@ app = Blueprint("Basespace", __name__, role="Bioinformatics", template_folder="t
 
 
 
-def credentials(account_id):
+def credentials(account_id, users_id=None):
     with Cursor() as cur:
         sql = """SELECT bsaccount.name, bsserver.url, bsaccount.token
                  FROM bsaccount
                  JOIN bsaccount_users ON bsaccount_users.bsaccount_id = bsaccount.id
                  JOIN bsserver ON bsserver.id = bsaccount.bsserver_id
                  WHERE bsaccount.id = %(account_id)s AND bsaccount_users.users_id = %(users_id)s;"""
-        cur.execute(sql, {"account_id": account_id, "users_id": session["id"]})
+        cur.execute(sql, {"account_id": account_id, "users_id": users_id or session["id"]})
         return cur.fetchone()
 
 
@@ -345,7 +345,7 @@ def bsdatasets_status(appsession_bsid):
             elif status == "in-progress":
                 text = _("Importing {}").format(details)
             elif status == "failed":
-                text = _("Import Failed: {}").format(details)
+                text = _("Failed: {}").format(details)
             elif status == "complete":
                 text = _("Imported to {}").format(project)
             else:
@@ -374,7 +374,7 @@ def bsdatasets_import(account_id, run, appsession_bsid):
                                  "appsession_bsid": appsession_bsid,
                                  "users_id": session["id"],
                                  "project_id": session["project_id"],
-                                 "--output-dir": fastq_s3_path}, salt="import_callback")
+                                 "output_dir": fastq_s3_path}, salt="import_callback")
     callback = absolute_url_for(".import_callback", token=callback_token)
     
     names = [k for k, v in request.form.items() if v == "on"]
@@ -386,18 +386,17 @@ def bsdatasets_import(account_id, run, appsession_bsid):
     print(" ".join(shlex.quote(arg) for arg in args))
     retval = run_task("BSImport", args)
     
-    sql = """INSERT INTO bsimportedsample (bsappsession_bsid, name, users_id, project_id, datetime_modified, status, details)
-                VALUES (%(bsappsession_bsid)s, %(name)s, %(users_id)s, %(project_id)s, current_timestamp, %(status)s, %(details)s)
-                ON CONFLICT ON CONSTRAINT uq_bsimportedsample_bsappsession_id_name
-                DO UPDATE SET users_id = %(users_id)s, project_id = %(project_id)s, datetime_modified = current_timestamp, status = %(status)s, details = %(details)s;"""
+    sql = """INSERT INTO bsimportedsample (bsappsession_bsid, name, users_id, project_id, datetime_modified, status)
+             VALUES (%(bsappsession_bsid)s, %(name)s, %(users_id)s, %(project_id)s, current_timestamp, %(status)s)
+             ON CONFLICT ON CONSTRAINT uq_bsimportedsample_bsappsession_id_name
+             DO UPDATE SET users_id = %(users_id)s, project_id = %(project_id)s, datetime_modified = current_timestamp, status = %(status)s;"""
     values = []
     for name in names:
         values.append({"bsappsession_bsid": appsession_bsid,
-                        "name": name,
-                        "users_id": session["id"],
-                        "project_id": session["project_id"],
-                        "status": "waiting",
-                        "details": ""})
+                       "name": name,
+                       "users_id": session["id"],
+                       "project_id": session["project_id"],
+                       "status": "waiting"})
     with Transaction() as trans:
         with trans.cursor() as cur:
             execute_batch(cur, sql, values)
@@ -424,37 +423,31 @@ def import_callback(token):
                               "details": request.form.get("details", "")})
             trans.commit()
             
-            if status != "complete":
-                return {}
-            
-            
-            return {}
-            account, server, token = credentials(token["account_id"]) or abort(BadRequest)
-
-            
-            
-            
-            sql = """INSERT INTO analysis ()
-                     VALUES ()
-                     RETURNING id;"""
-            cur.execute(sql, {})
-            analysis_id = cur.fetchone()[0]
-            
-            sql = """INSERT INTO audittrail (action, target, name, keyvals, users_id, ip_address)
-                     VALUES ('Import', 'BaseSpace', %(runsample)s, %(keyvals)s, %(users_id)s, %(ip_address)s)
-                     RETURNING id;"""
-            cur.execute(sql, {"runsample": token["runsample"],
-                              "keyvals": {"Status": request.form["status"], "Project": ""}, 
-                              "users_id": token["users_id"], 
-                              "ip_address": token["ip_address"]})
-            audittrail_id = cur.fetchone()[0]
-            
-            sql = """INSERT INTO auditlink (audittrail_id, tablename, row_id)
-                     VALUES (%(audittrail_id)s, %(tablename)s, %(row_id)s)
-                     ON CONFLICT DO NOTHING;"""
-            values = [{"audittrail_id": audittrail_id, "tablename": "appsession", "row_id": token["appsession_id"]},
-                      {"audittrail_id": audittrail_id, "tablename": "analysis", "row_id": analysis_id}]
-            execute_batch(cur, sql, values)
+            # All the fastqs of a single sample have been imported
+            if status == "complete":
+                account, server, token = credentials(token["account_id"], users_id=token["users_id"]) or abort(BadRequest)
+                
+                sql = """INSERT INTO analysis ()
+                        VALUES ()
+                        RETURNING id;"""
+                cur.execute(sql, {})
+                analysis_id = cur.fetchone()[0]
+                
+                sql = """INSERT INTO audittrail (action, target, name, keyvals, users_id, ip_address)
+                        VALUES ('Import', 'BaseSpace', %(runsample)s, %(keyvals)s, %(users_id)s, %(ip_address)s)
+                        RETURNING id;"""
+                cur.execute(sql, {"runsample": token["runsample"],
+                                "keyvals": {"Status": request.form["status"], "Project": ""}, 
+                                "users_id": token["users_id"], 
+                                "ip_address": token["ip_address"]})
+                audittrail_id = cur.fetchone()[0]
+                
+                sql = """INSERT INTO auditlink (audittrail_id, tablename, row_id)
+                        VALUES (%(audittrail_id)s, %(tablename)s, %(row_id)s)
+                        ON CONFLICT DO NOTHING;"""
+                values = [{"audittrail_id": audittrail_id, "tablename": "appsession", "row_id": token["appsession_id"]},
+                        {"audittrail_id": audittrail_id, "tablename": "analysis", "row_id": analysis_id}]
+                execute_batch(cur, sql, values)
     return {}
 
 

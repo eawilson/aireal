@@ -162,6 +162,7 @@ INSERT INTO bsserver (region, country, url) VALUES ('EUC1', 'Europe', 'https://a
 INSERT INTO bsserver (region, country, url) VALUES ('EUW2', 'UK', 'https://api.euw2.sh.basespace.illumina.com');
 INSERT INTO bsserver (region, country, url) VALUES ('CNN1', 'China', 'https://api.cnn1.sh.basespace.illumina.com.cn');
 INSERT INTO bsserver (region, country, url) VALUES ('APS2', 'Australia', 'https://api.aps2.sh.basespace.illumina.com');
+INSERT INTO bsstatus (status) VALUES ('waiting');
 INSERT INTO bsstatus (status) VALUES ('in-progress');
 INSERT INTO bsstatus (status) VALUES ('failed');
 INSERT INTO bsstatus (status) VALUES ('complete');
