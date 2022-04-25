@@ -3,8 +3,7 @@ import pdb
 from jinja2 import Markup
 
 from .utils import tablerow
-from .wrappers import Local
-from .i18n import _
+from .i18n import _, Date
 
 
 
@@ -36,5 +35,5 @@ def log_table(cur, table, row_id):
         body.append(tablerow(_(action),
                              Markup("<br>".join(pretty(item) for item in sorted(details.items()))),
                              name,
-                             Local(dtime)))
+                             Date(dtime)))
     return {"head": head, "body": body}

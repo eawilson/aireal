@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="robots" content="noindex,nofollow">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <!--title></title-->
+        
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/paper.1.8.3.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome-free-5.12.1-web.min.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/aireal-paper.css') }}">
+
+        <script src="{{ url_for('static', filename='js/aireal.js') }}" defer></script>
+    </head>
+
+    <body>
+        <nav class="border fixed split-nav">
+            <div class="nav-brand">
+                <h3><span id="logo" class="padding-right-small">{{ navbar.app }}</span><span class="padding-right-large">{{ navbar.name }}</span></h3>
+            </div>
+                
+            {% if navbar.left %}
+                <div>
+                    <ul class="inline">
+                        {% for item in navbar.left %}
+                            <li>
+                                {% if item.dropdown %}
+                                    <div class="navbar-item has-dropdown is-hoverable" data-href="{{ item.href }}">
+                                        <a class="navbar-link">{{ item.text }}</a>
+                                        <div class="navbar-dropdown border border-primary is-right"></div>
+                                    </div>
+                                {% else %}
+                                    <a class="{% if item.text == navbar.active %} is-active{% endif %}" href="{{ item.href }}">{{ item.text }}</a>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                <div>
+            {% endif %}
+
+{#                {% if navbar.right %}
+                    <div class="navbar-end">
+                        {% for item in navbar.right %}
+                            {% if item.dropdown %}
+                                <div class="navbar-item has-dropdown is-hoverable" data-href="{{ item.href }}">
+                                    <a class="navbar-link">{{ item.text }}</a>
+                                    <div class="navbar-dropdown is-right border border-primary"></div>
+                                </div>
+                            {% else %}
+                                <a class="navbar-item{% if item.text == navbar.active %} is-active{% endif %}" href="{{ item.href }}">{{ item.text }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+#}        </nav>
+        
+        <section class="main-section">
+            {% if tabs %}
+                <div class="tabs is-boxed">
+                    <ul>
+                        {% for tab in tabs %}
+                            {% if tab.active %}
+                                <li class="is-active"><a href="#">{{ tab.text }}{% if tab.badge %}<span class="tag is-dark">{{ tab.badge }}</span>{% endif %}</a></li>
+                            {% else %}
+                                <li><a href="{{ tab.href }}">{{ tab.text }}{% if tab.badge %}<span class="tag is-dark">{{ tab.badge }}</span>{% endif %}</a></li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+            
+            {% block content %}
+            {% endblock %}
+        </section>
+        
+    </body>
+</html>

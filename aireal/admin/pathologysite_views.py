@@ -20,9 +20,8 @@ def pathologysite_log(pathologysite_id):
     with Cursor() as cur:
         table = log_table(cur, "pathologysite", pathologysite_id)
 
-    table["title"] = _("Pathology Sites Log")
     buttons={"back": (_("Back"), url_for(".pathologysite_list"))}
-    return render_page("table.html", table=table, buttons=buttons)
+    return render_page("table.html", table=table, buttons=buttons, title=_("Pathology Sites Log"))
 
         
 
@@ -87,5 +86,6 @@ def pathologysite_list():
                {"name": _("Log"), "href": url_for(".pathologysite_log", pathologysite_id=0)})
 
     return render_page("table.html",
-                       table={"head": head, "body": body, "actions": actions, "new": url_for(".edit_pathologysite"), "title": "Pathology Sites"},
+                       table={"head": head, "body": body, "actions": actions, "new": url_for(".edit_pathologysite")},
+                       title=_("Pathology Sites"),
                        buttons={"back": (_("Back"), url_for(".editmenu"))})

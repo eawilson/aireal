@@ -5,26 +5,12 @@
     <script src="{{ url_for('static', filename='js/tablesort.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/tablemenu.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/tableautoupdate.js') }}" defer></script>
-    
-    <div>
-        {% if table.breadcrumbs %}
-            <nav class="breadcrumb">
-                <ul>
-                    {% for name, url, active in table.breadcrumbs %}
-                        <li {% if active %}class="is-active"{% endif %}><a href="{{ url }}">{{ name }}</a></li> 
-                    {% endfor %}
-                </ul>
-            </nav>
-        {% endif %}
-    
-        <div>
-            {% if table.title %}<span>{{ table.title }}</span>{% endif %}
-            
-            {% if table.get("showhide", True) %}
-                <a id="show-hide-button" class="button is-info is-light is-pulled-right is-small" data-show-text="{{ _("Show Deleted") }}" data-hide-text="{{ _("Hide Deleted") }}"></a>
-            {% endif %}
-        </div>
+        
+    <div>    
         {% if table.new %}<a class="icon" href="{{ table.new }}"><i class="fas fa-plus"></i></a>{% endif %}
+        {% if table.get("showhide", True) %}
+            <a id="show-hide-button" class="button is-info is-light is-pulled-right is-small" data-show-text="{{ _("Show Deleted") }}" data-hide-text="{{ _("Hide Deleted") }}"></a>
+        {% endif %}
     </div>
     
     <table class="table is-striped is-fullwidth{% if table.autoupdate %} autoupdate" data-autoupdate-key="{{ table.autoupdate.key }}" data-autoupdate-value="{{ table.autoupdate.value }}" data-autoupdate-href="{{ table.autoupdate.href }}" data-autoupdate-miliseconds="{{ table.autoupdate.miliseconds }}{% endif %}">
@@ -56,6 +42,15 @@
             </ul>
         </nav>   
     {% endif %}
+
+    {{ table_form }}
+        <input id="action" type="hidden" name="action" value="">
+        {% if buttons %}
+            {% if buttons.submit %}<input id="submit-button" class="button is-link" type="submit" value="{{ buttons.submit[0] }}" form="table-form" formaction="{{ buttons.submit[1] }}">{% endif %}
+            {% if buttons.back %}<a id="back-button" class="button is-link" href="{{ buttons.back[1] }}">{{ buttons.back[0] }}</a>{% endif %}
+        {% endif %}
+        {% include "bulma/modal.html" %}
+    </form>
     
     {% if table.actions %}
         <div class="dropdown" id="table-menu{{ table.id }}">
@@ -68,12 +63,4 @@
             </div>
         </div>
     {% endif %}
-
-    {{ table_form }}
-        <input id="action" type="hidden" name="action" value="">
-        {% if buttons.submit %}<input id="submit-button" class="button is-link" type="submit" value="{{ buttons.submit[0] }}" form="table-form" formaction="{{ buttons.submit[1] }}">{% endif %}
-        {% if buttons.back %}<a id="back-button" class="button is-link" href="{{ buttons.back[1] }}">{{ buttons.back[0] }}</a>{% endif %}
-        
-        {% include "bulma/modal.html" %}
-    </form>
 {% endblock %}

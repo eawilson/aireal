@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 
 APP="aireal"
-DOMAIN="ai-real.org"
-SUBDOMAIN="dev"
+
+if [ -z "$1" ]
+then
+    echo 'Error: Domain required'
+    exit 1
+fi
+
+ARG=$1
+SUBDOMAIN=${ARG#*.}
+DOMAIN=${ARG%%.*}
 
 sudo apt-get -y update
 sudo apt-get -y dist-upgrade

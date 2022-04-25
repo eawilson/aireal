@@ -3,7 +3,7 @@
 {% import "bulma/macros.html" as macros %}
 
 {% block content %}
-    {{ title }}
+    <script src="{{ url_for('static', filename='js/form.js') }}" defer></script>
     
     {% if image %}<div><img id="qrcode" src="{{ image }}"></div>{% endif %}
     

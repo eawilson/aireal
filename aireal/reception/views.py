@@ -4,7 +4,7 @@ from flask import url_for
 
 from ..utils import Cursor, Transaction, tablerow, iso8601_to_utc
 from flask import session, redirect, url_for, request, send_file, current_app
-from ..flask import abort, render_page, render_template, Blueprint, sign_token, absolute_url_for
+from ..flask import abort, render_page, render_template, Blueprint, sign_token
 from ..i18n import _
 
 
@@ -13,67 +13,25 @@ def reception_navbar():
     return [{"text": _("Collections"), "href":  url_for("Reception.collection_list")}]
 
 
-app = Blueprint("Reception", __name__, navbar=reception_navbar)
+
+Blueprint.navbars["Reception"] = reception_navbar
+app = Blueprint("Reception", __name__)
 
 
 
 @app.route("/collections")
 def collection_list():
-    #with Cursor() as cur:
-        #sql = """SELECT bsaccount.id, bsaccount.name, bsserver.region, bsserver.country
-                 #FROM bsaccount
-                 #JOIN users_bsaccount ON bsaccount.id = users_bsaccount.bsaccount_id
-                 #JOIN bsserver ON bsserver.id = bsaccount.bsserver_id
-                 #WHERE users_bsaccount.users_id = %(users_id)s
-                 #ORDER BY bsaccount.name;"""
-        #body = []
-        #cur.execute(sql, {"users_id": session["id"]})
-        #for bsaccount_id, bsaccount_name, region, country in cur:
-            #body.append(((bsaccount_name,
-                          #"{} ({})".format(region, _(country))),
-                          #{"id": bsaccount_id}))
-    
-    #actions = ({"name": _("Select"), "href": url_for("Bioinformatics.Basespace.runs", account_id=0)},)
-    table = {"head": [],
-             "body": []}
-    #now = utcnow()
-    #today = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
-    #filters = [collection.c.received_datetime >= today]
-    
-    #sql = select([collection.c.id, project.c.name.label("project"), subjects.c.name.label("subject"), material.c.name.label("material"), collection.c.received_datetime, users.c.name.label("user"), collection.c.deleted]). \
-            #select_from(join(collection, samples, samples.c.collection_id == collection.c.id). \
-                        #join(subjects, collection.c.subject_id == subjects.c.id). \
-                        #join(project, subjects.c.project_id == project.c.id). \
-                        #join(material, material.c.id == samples.c.material_id). \
-                        #join(logs, and_(logs.c.row_id == collection.c.id, logs.c.tablename == collection.name)). \
-                        #join(users, users.c.id == logs.c.user_id)). \
-            #where(and_(*filters)). \
-            #order_by(collection.c.received_datetime.desc())
-    
-    #head=(_("Subject"), _("Project"), _("Samples"), _("Date Received"), _("Received By"))
-    #body = []
-    #last_id = None
-    #with engine.connect() as conn:
-        #for row in conn.execute(sql):
-            #if row["id"] == last_id:
-                #body[-1][0][2] += f', {row["material"]}'
-            #body += [[row["subject"],
-                      #row["project"],
-                      #row["material"],
-                      #Local(row["received_datetime"]),
-                      #row["user"]],
-                     #{"deleted": row["deleted"],
-                      #"id": row["id"]}
-                    #]
-    #actions = ({"name": _("View"), "href": url_for(".view_collection", collection_id=0)},
-               #{"name": _("Edit"), "href": url_for(".edit_collection", collection_id=0)},
-               #{"name": _("Delete"), "href": url_for(".edit_collection", collection_id=0), "class": "!deleted", "method": "POST"},
-               #{"name": _("Restore"), "href": url_for(".edit_collection", collection_id=0), "class": "deleted", "method": "POST"},
-               #{"name": _("Log"), "href": url_for(".collection_log", collection_id=0)})
-    return render_page("table.html", table=table, buttons=())
+    body = []
+    head = (_("Name"), _("Project"), _("Samples"), _("Date"))
+    actions = ({"name": _("Edit"), "href": url_for(".edit_locationmodel", locationmodel_id=0)},
+               {"name": _("Delete"), "href": url_for(".edit_locationmodel", locationmodel_id=0), "class": "!deleted", "method": "POST"},
+               {"name": _("Restore"), "href": url_for(".edit_locationmodel", locationmodel_id=0), "class": "deleted", "method": "POST"},
+               {"name": _("Log"), "href": url_for(".locationmodel_log", locationmodel_id=0)})
+
+    return render_page("table.html",
+                       table={"head": head, "body": body, "actions": actions, "new": url_for(".new_collection")}, 
+                       title="Location Models")
     _("Reception")
-    _("LoBind")
-    _("Standard")
     _("Home")
     _("Site")
     _("Building")
@@ -89,6 +47,80 @@ def collection_list():
     _("Tube")
 
 
+
+@app.route("/collections/new", methods=["GET", "POST"])
+def new_collection():
+    selected_locationtype = request.form.get("locationtype") or request.args.get("locationtype")
+    
+    with Transaction() as trans:
+        with trans.cursor() as cur:
+            sql = """WITH child AS (
+                        SELECT locationtype_locationtype.parent AS parent, locationtype.name AS name
+                        FROM locationtype
+                        JOIN locationtype_locationtype ON locationtype_locationtype.child = locationtype.name
+                        WHERE locationtype.movable = 'inbuilt' AND locationtype.deleted = false
+                        )
+                     SELECT locationtype.name, locationtype.movable, locationtype.has_temperature, locationtype.has_volume, child.name
+                     FROM locationtype
+                     LEFT OUTER JOIN child ON child.parent = locationtype.name
+                     WHERE locationtype.has_models AND locationtype.deleted = false
+                     ORDER BY locationtype.name = %(selected_locationtype)s;"""
+            cur.execute(sql, {"selected_locationtype": selected_locationtype})
+
+            locationtype_choices = []
+            for locationtype, movable, has_temperature, has_volume, contains in cur:
+                locationtype_choices.append((locationtype, _(locationtype)))
+            
+            form = LocationModelForm(request.form)
+            form.locationtype.choices = sorted(locationtype_choices, key=lambda x:x[1])
+            
+            if selected_locationtype is None or not has_temperature:
+                del form["temperature"]
+            if selected_locationtype is None or not has_volume:
+                del form["volume"]
+            if selected_locationtype is None or contains != "Shelf":
+                del form["shelves"]
+            if selected_locationtype is None or contains != "Tray":
+                del form["trays"]
+            if selected_locationtype is None or contains != "Position":
+                del form["rows"]
+                del form["columns"]
+            
+            if request.args.get("locationtype"):
+                del form["locationtype"]
+                del form["name"]
+                return render_template("formfields.html", form=form)
+            
+            if request.method == "POST" and form.validate():
+                data = form.data
+                print(data)
+                sql = """INSERT INTO locationmodel (name, locationtype, temperature, volume, movable, childtype, column_count, row_count)
+                         VALUES (%(name)s, %(locationtype)s, %(temperature)s, %(volume)s, %(movable)s, %(childtype)s, %(column_count)s, %(row_count)s)
+                         RETURNING id;"""
+                try:
+                    cur.execute(sql, {"name": data["name"],
+                                      "locationtype": data["locationtype"],
+                                      "temperature": data.get("temperature"),
+                                      "volume": data.get("volume"),
+                                      "movable": movable,
+                                      "childtype": contains,
+                                      "column_count": data.get("shelves", data.get("trays", data.get("columns"))),
+                                      "row_count": data.get("rows")})
+                except UniqueViolation:
+                    trans.rollback()
+                    form.name.errors = _("Must be unique.")
+                else:
+                    locationmodel_id = cur.fetchone()[0]
+                    audit_log(cur, "Created", "Location Model", data["name"], keyvals_from_form(form), "", ("locationmodel", locationmodel_id))
+                    return redirect(url_for(".locationmodel_list"))
+    
+    buttons={"submit": (_("Save"), url_for(".new_locationmodel")),
+             "back": (_("Cancel"), url_for(".locationmodel_list"))}
+    return render_page("form.html", form=form, buttons=buttons, title=_("New Location Model"))
+
+
+
+
 @app.route("/collections/<int:collection_id>")
 def view_collection(collection_id):
     pass
@@ -101,6 +133,3 @@ def edit_collection(collection_id):
 def collection_log(collection_id):
     pass
 
-@app.route("/collections/new")
-def new_collection():
-    pass

@@ -9,6 +9,7 @@ from html import escape
 from jinja2 import Markup
 from flask import session, current_app
 
+from ..i18n import _, Unit
 
 email_regex = re.compile("^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 name_regex = re.compile("[^a-zA-Z-' ]")
@@ -233,8 +234,8 @@ class Form(Fields):
     @property
     def data(self):
         return {name: field.data for name, field in self.items() if hasattr(field, "data")}
-        
-
+    
+    
     def __html__(self):
         if any(isinstance(field, FileInput) for field in self.fields):
             self.attr["enctype"] = "multipart/form-data"
@@ -320,9 +321,12 @@ class Input(Element):
    
     
     def label(self, **kwargs):
-        return Markup('<label {}>{}</label>'.format(HTMLAttr(kwargs, _for=self.attr["id"]), escape(self._label)))
-    
-    
+        if self._label:
+            return Markup('<label {}>{}</label>'.format(HTMLAttr(kwargs, _for=self.attr["id"]), escape(_(self._label))))
+        return ""
+
+
+
     @property
     def element(self):
         return self.attr.get("type", "text")
@@ -434,58 +438,58 @@ class EmailInput(LowerCaseInput):
 
 
 
-class IntegerInput(Input):
-    def __init__(self, *args, minval=None, maxval=None, **kwargs):
-        self.minval=minval
-        self.maxval = maxval
+class NumericInput(Input):
+    def __init__(self, *args, units=None, frac_prec=None, min_val=None, max_val=None, **kwargs):
+        self.units = units
+        self.frac_prec = frac_prec
+        self.min_val = min_val
+        self.max_val = max_val
         super().__init__(*args, **kwargs)
-    
+
+    def validate(self):
+        if super().validate() and self.data != self.empty():
+            if self.min_val is not None and self.data < self.min_val:
+                self.errors = "Cannot be less than {}.".format(self.min_val)
+            if self.max_val is not None and self.data > self.max_val:
+                self.errors = "Cannot be greater than {}.".format(self.max_val)
+        return not self.errors
+
+    def label(self, **kwargs):
+        if self._label and self.units:
+            return Markup('<label {}>{} ({})</label>'.format(HTMLAttr(kwargs, _for=self.attr["id"]), escape(_(self._label)), escape(Unit(self.units))))
+        else:
+            return super().label(**kwargs)
+
+
+
+class IntegerInput(NumericInput):
     def convert(self, val):
         try:
             return int(val)
         except (ValueError, TypeError):
             self.errors = "Not a valid integer."
-
-    def validate(self):
-        if super().validate() and self.data != self.empty():
-            if self.minval is not None and self.data < self.minval:
-                self.errors = "Cannot be less than {}.".format(self.minval)
-            if self.maxval is not None and self.data > self.maxval:
-                self.errors = "Cannot be greater than {}.".format(self.maxval)
-        return not self.errors
     
 
 
-class FloatInput(Input):
-    def __init__(self, *args, minval=None, maxval=None, **kwargs):
-        self.minval=minval
-        self.maxval = maxval
-        super().__init__(*args, **kwargs)
-    
+class FloatInput(NumericInput):
     def convert(self, val):
         try:
-            return float(val)
+            val = float(val)
+            if self.frac_prec is not None:
+                val = float(f"{{:0.{self.frac_prec}f}}".format(val))
+            return val
         except (ValueError, TypeError):
             self.errors = "Not a valid floating point number."
-
-    def validate(self):
-        if super().validate() and self.data != self.empty():
-            if self.minval is not None and self.data < self.minval:
-                self.errors = "Cannot be less than {}.".format(self.minval)
-            if self.maxval is not None and self.data > self.maxval:
-                self.errors = "Cannot be greater than {}.".format(self.maxval)
-        return not self.errors
     
 
 
-class DecimalInput(Input):
-    def __init__(self, *args, prec=1, **kwargs):
-        self.prec = prec
-        super().__init__(*args, **kwargs)
-    
+class DecimalInput(NumericInput):
     def convert(self, val):
         try:
-            return Decimal(val).quantize(Decimal("".join(["1."]+(["0"]*self.prec)))) # looks crazy but is recommended way to round a decimal from python docs.
+            val = Decimal(val)
+            if self.frac_prec is not None:
+                val = val.quantize(Decimal("".join(["1."]+(["0"]*self.frac_prec)))) # looks crazy but is recommended way to round a decimal from python docs.
+            return val
         except InvalidOperation:
             self.errors = "Not a valid decimal."
 

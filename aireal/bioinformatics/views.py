@@ -20,7 +20,8 @@ def bioinformatics_navbar():
 
 
 
-app = Blueprint("Bioinformatics", __name__, navbar=bioinformatics_navbar)
+Blueprint.navbars["Bioinformatics"] = bioinformatics_navbar
+app = Blueprint("Bioinformatics", __name__)
 app.register_blueprint(basespace)
 
 

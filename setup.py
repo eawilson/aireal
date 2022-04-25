@@ -18,7 +18,7 @@ setup(name="aireal",
                       "passlib",
                       "itsdangerous",
                       "pytz",
-                      "babel",
+                      "babel==2.9.1", # We use internal functions so likely to require code change to change version
                       "pyqrcode",
                       "bcrypt",
                       "requests>=2.27.0",

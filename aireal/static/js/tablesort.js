@@ -11,13 +11,23 @@
         }
 
 
-    function compareAsc(a, b) {
+    function compareAscString(a, b) {
         return (a[0] > b[0]) ? 1 : (a[0] < b[0]) ? -1 : 0;
         }
 
 
-    function compareDesc(a, b) {
+    function compareDescString(a, b) {
         return (a[0] < b[0]) ? 1 : (a[0] > b[0]) ? -1 : 0;
+        }
+
+
+    function compareAscNumeric(a, b) {
+        return a[0] - b[0];
+        }
+
+
+    function compareDescNumeric(a, b) {
+        return b[0] - a[0];
         }
 
 
@@ -48,16 +58,26 @@
             }
         
         const rows = tbody.children;
-        const data = [];
-        
-        for (var i = 0; i < rows.length; ++i) {
-            var row = rows[i];
-            var cell = row.children[columnIndex];
-            var value = 'sortValue' in cell.dataset ? cell.dataset.sortValue : cell.textContent;
-            data.push([value, row]);
+        if (rows.length == 0) {
+            return;
             }
         
-        data.sort((sortClass == 'sorted-asc') ? compareAsc : compareDesc);
+        const data = [];
+        if ('sortValue' in rows[0].children[columnIndex].dataset) {
+            for (var i = 0; i < rows.length; ++i) {
+                var row = rows[i];
+                data.push([Number(row.children[columnIndex].dataset.sortValue), row]);
+                }
+            data.sort((sortClass == 'sorted-asc') ? compareAscNumeric : compareDescNumeric);
+            }
+        else {
+            for (var i = 0; i < rows.length; ++i) {
+                var row = rows[i];
+                data.push([row.children[columnIndex].textContent, row]);
+                }            
+            data.sort((sortClass == 'sorted-asc') ? compareAscString : compareDescString);
+            }
+        
         for (var i = 0; i < data.length; ++i) {
             tbody.append(data[i][1]);
             }

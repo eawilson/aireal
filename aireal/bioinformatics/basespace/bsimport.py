@@ -158,6 +158,8 @@ def main():
     
     for samplename, datasets in samples.items():
         if samplename in args.samplenames:
+            destinations = []
+            
             for dataset in datasets:
                 try:
                     remaining = 1
@@ -180,6 +182,7 @@ def main():
                                     stream_upload(s3_client, download, s3_bucket, s3_key)
                                 else:
                                     print(f"Skipping {filename}", file=sys.stderr)
+                                destinations.append(f"s3://{s3_bucket}/{s3_key}")
 
                             else:
                                 path = os.path.join(args.output_dir, *identifier)
@@ -191,6 +194,7 @@ def main():
                                             f_out.write(chunk)
                                 else:
                                     print(f"Skipping {filename}", file=sys.stderr)
+                                destinations.append(path)
                 
                 except requests.exceptions.HTTPError as e:
                     callback(args.callback, data={"name": samplename, "status": "failed", "details": e.response.reason})
@@ -211,7 +215,7 @@ def main():
                     raise
                 
                 else:
-                    callback(args.callback, data={"name": samplename, "status": "complete"})
+                    callback(args.callback, data={"name": samplename, "status": "complete", "destinations": destinations})
 
 
 

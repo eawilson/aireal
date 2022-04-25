@@ -13,7 +13,6 @@ from urllib.parse import urlparse, parse_qs, unquote_plus
 
 import pytz
 import pyqrcode
-from babel import Locale
 
 from flask import (session,
                    redirect,
@@ -33,9 +32,9 @@ from .forms import (LoginForm,
                    ChangePasswordForm,
                    TwoFactorForm)
 from .utils import Transaction, Cursor
-from .flask import Blueprint, render_page, render_template, abort, original_referrer, sign_token, valid_roles, _navbars
+from .flask import Blueprint, render_page, render_template, abort, sign_token, valid_roles
 from .aws import sendmail
-from .i18n import _, locale_from_headers
+from .i18n import _, locale_from_headers, Locale
 
 
 
@@ -99,7 +98,7 @@ def hotp(secret, counter, token_length=6):
 def root():
     if "id" in session:
         try:
-            return redirect(_navbars[session["role"]]()[0]["href"])
+            return redirect(Blueprint.navbars[session["role"]]()[0]["href"])
         except (KeyError, IndexError):
             return render_page("base.html")
     else:
@@ -137,7 +136,7 @@ def login():
                          FROM role_users
                          WHERE users_id = %(users_id)s AND name IN %(valid_roles)s
                          ORDER BY name = %(role)s DESC;"""
-                cur.execute(sql, {"users_id": users_id, "role": last_session.get("role", ""), "valid_roles": tuple(valid_roles)})
+                cur.execute(sql, {"users_id": users_id, "role": last_session.get("role", ""), "valid_roles": valid_roles()})
                 role = (cur.fetchone() or (None,))[0]
             
             if role is not None:
@@ -199,7 +198,7 @@ def logout_menu():
                      FROM role_users
                      WHERE users_id = %(users_id)s AND name != %(role)s AND name IN %(valid_roles)s
                      ORDER BY role_users.name;"""
-            cur.execute(sql, {"users_id": session["id"], "role": session.get("role", ""), "valid_roles": tuple(valid_roles)})
+            cur.execute(sql, {"users_id": session["id"], "role": session.get("role", ""), "valid_roles": valid_roles()})
             for role, in cur:
                 rows.append({"text": _(role), "href": url_for(".setrole", role=role)})
     if rows:
@@ -236,7 +235,7 @@ def setrole(role):
             sql = """SELECT name
                      FROM role_users
                      WHERE users_id = %(users_id)s AND name = %(role)s AND name IN %(valid_roles)s;"""
-            cur.execute(sql, {"users_id": session["id"], "role": role, "valid_roles": tuple(valid_roles)})
+            cur.execute(sql, {"users_id": session["id"], "role": role, "valid_roles": valid_roles()})
             role = (cur.fetchone() or (None,))[0]
             
             if role is not None:
@@ -339,7 +338,7 @@ def change_password():
 
 
 
-@app.route("/setpassword/<string:token>", methods=["GET", "POST"], signature="set_password", max_age=60*60*24*7)
+@app.route("/setpassword/<string:token>", methods=["GET", "POST"], max_age=60*60*24*7)
 def set_password(token):
     reset_datetime = token.get("reset_datetime", datetime.now(tz=timezone.utc))
     email = token.get("email", "")
@@ -401,7 +400,8 @@ def send_setpassword_email(cur, email):
 @app.route("/qrcode/<string:email>/<string:secret>/<string:token>", signature="set_password", max_age=60*60*24*7)
 def qrcode(email, secret, token):
     
-    service = quote(current_app.config.get("NAME", "<APP>"))
+    #service = quote(current_app.config.get("NAME", "<APP>"))
+    service = quote(request.host.split(":")[0])
     email = quote(email)
     secret = quote(secret)
     

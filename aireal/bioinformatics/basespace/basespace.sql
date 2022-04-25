@@ -146,7 +146,6 @@ CREATE TABLE bsimportedsample (
     CONSTRAINT pk_bsimportedsample PRIMARY KEY (id),
     CONSTRAINT uq_bsimportedsample_bsappsession_id_name UNIQUE (bsappsession_bsid, name),
     CONSTRAINT fk_bsimportedsample_status FOREIGN KEY (status) REFERENCES bsstatus (status),
-    --CONSTRAINT fk_bsimportedsample_bsappsession_id_bsappsession FOREIGN KEY (bsappsession_id) REFERENCES bsappsession (id),
     CONSTRAINT fk_bsimportedsample_users_id FOREIGN KEY (users_id) REFERENCES users (id),
     CONSTRAINT fk_bsimportedsample_project_id FOREIGN KEY (project_id) REFERENCES project (id)
    );

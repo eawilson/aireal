@@ -9,6 +9,4 @@ BEGIN
     END LOOP;
 END $$;
 
-DROP TYPE IF EXISTS movability;
-
 */

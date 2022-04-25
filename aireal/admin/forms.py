@@ -1,4 +1,4 @@
-from ..i18n import __ as _
+from ..i18n import i18n_nop as _
 from ..forms import (Form,
                      Input,
                      TextInput,
@@ -18,7 +18,17 @@ class UserForm(Form):
         self.surname = TextInput(_("Surname"))
         self.forename = TextInput(_("Forename"))        
         self.email = EmailInput(_("Email"))
+
+
+
+class UserRoleForm(Form):
+    def definition(self):
         self.role = MultiCheckboxInput(_("Roles"), coerce=str, required=False)
+
+
+
+class UserProjectForm(Form):
+    def definition(self):
         self.project = MultiCheckboxInput(_("Projects"), required=False)
 
 
@@ -44,29 +54,27 @@ class ProjectForm(Form):
 
 
 
+class ProjectIdentifierForm(Form):
+    def definition(self):
+        self.identifiertype_id = SelectInput(_("Identifier Type"), _class="get-dynamic-fields")
+        self.required = BooleanInput(_("Required"), required=False)
+        self.regex = TextInput(_("Regular Expression"), required=False)
+
+
+
 class LocationModelForm(Form):
     def definition(self):
         self.name = TextInput(_("Name"))
         self.locationtype = SelectInput(_("Type"), coerce=str, _class="get-dynamic-fields")
         
-        self.temperature = IntegerInput(_("Temperature (°C)"))
+        self.temperature = IntegerInput(_("Temperature"), units="temperature-celsius")
+        
+        self.shelves = IntegerInput(_("Shelves"), min_val=1)
+        self.trays = IntegerInput(_("Trays"), min_val=1)
+        self.rows = IntegerInput(_("Rows"), min_val=1)
+        self.columns = IntegerInput(_("Columns"), min_val=1)
 
-        self.shelves = IntegerInput(_("Shelves"))
-        self.shelf_width = IntegerInput(_("Shelf Width (cm)"))
-        self.shelf_depth = IntegerInput(_("Shelf Depth (cm)"))
-
-        self.trays = IntegerInput(_("Trays"))
-        self.boxes = IntegerInput(_("Boxes per Tray"))
- 
-        
-        self.rows = IntegerInput(_("Rows"))
-        self.columns = IntegerInput(_("Columns"))
-        
-        self.width = IntegerInput(_("Width (cm)"))
-        self.depth = IntegerInput(_("Depth (cm)"))
-        
-        self.material = SelectInput(_("Material"))
-        self.volume = FloatInput(_("Volume (ml)"))
+        self.volume = FloatInput(_("Volume"), units="volume-milliliter", frac_prec=1)
 
 
 

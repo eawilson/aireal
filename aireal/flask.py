@@ -18,16 +18,13 @@ from psycopg2 import IntegrityError
 from .i18n import _
 from .forms import ActionForm
 
-__all__ = ["Blueprint",
-           "utcnow",
-           "build_url"
-           "local_subnet",
+__all__ = ["valid_roles",
            "sign_token",
+           "build_url"
+           "Blueprint",
            "abort",
-           "tablerow",
            "render_template",
            "render_page",
-           "navbar",
            "sign_cookie",
            "unique_key",
            "iso8601_to_utc",
@@ -36,8 +33,9 @@ __all__ = ["Blueprint",
 
 
 
-valid_roles = set()
-_navbars = {}
+def valid_roles():
+    return tuple(set(role.split(".")[0] for role in current_app.blueprints.keys() if role != "Auth"))
+
 
 
 def sign_token(data, salt):
@@ -56,11 +54,6 @@ def build_url(*path, **params):
 
 
 
-def absolute_url_for(*args, **kwargs):
-    return url_for(*args, _external=True, **kwargs)
-
-
-
 class _ReturnEndpoint(object):
     # Match call signature used for route registration to extract
     # endpoints from the lambda functions that they are stored in.
@@ -71,22 +64,8 @@ class _ReturnEndpoint(object):
 
 
 class Blueprint(flask.Blueprint):
-    def __init__(self, name, import_name, role=None, navbar=None, **kwargs):
-        """ Wrapper around Bluprint __init__ method with the 
-            additional positional argument *roles. This lists
-            all the roles that are allowed to access the routes
-            of this Blueprint. If no roles are provided then all
-            logged in users can access the route.
-        """
-        if navbar is not None:
-            valid_roles.add(name)
-            _navbars[name] = navbar
-        self.signatures = {}
-        self.role = role or name
-        return super().__init__(name, import_name, **kwargs)
-        
-        
-        
+    navbars = {}
+    
     def route(self, rule, signature=None, max_age=None, **options):
         """ Wrapper arounf Blueprint route with the additional positional
             argument *roles. This overides *roles in the __init__ method
@@ -96,9 +75,7 @@ class Blueprint(flask.Blueprint):
             1) Check that the user is logged in.
             
             2) Check that the user has assumed the correct role to access
-               this view. WARNING If a view is decorated with multiple routes
-               then the roles from the innermost decorator will be used for
-               all routes.
+               this view.
             
             3) Catch IntegrityErrors caused by simultaneous attemps to
                write the same rows in the databse.
@@ -110,12 +87,8 @@ class Blueprint(flask.Blueprint):
                 This depends on private internals of the Blueprint which could
                 potentialy change in future versions.
             """
-            if signature:
-                self.signatures[rule] = partial(_validate_token,
-                                                max_age=max_age,
-                                                salt=signature)
-            
             endpoint = options.pop("endpoint", None) or function.__name__
+
             for registration_function in self.deferred_functions:
                 try:
                     if registration_function(_ReturnEndpoint) == endpoint:
@@ -127,10 +100,9 @@ class Blueprint(flask.Blueprint):
             else:
                 @wraps(function)
                 def wrapper(*args, **kwargs):
-                    rule = request.url_rule.rule
-                    if rule in self.signatures:
+                    if "/<string:token>" in request.url_rule.rule:
                         token = kwargs["token"]
-                        deserialised = self.signatures[rule](token)
+                        deserialised = _validate_token(token, max_age=max_age, salt=signature or endpoint)
                         if not deserialised:
                             return redirect(url_for("Auth.login"))
                         kwargs["token"] = {"token": token, **deserialised}
@@ -138,7 +110,7 @@ class Blueprint(flask.Blueprint):
                     elif "id" not in session:
                         return redirect(url_for("Auth.login"))
                     
-                    elif self.role in _navbars and session["role"] != self.role:
+                    elif "Auth" != request.blueprint.split(".")[0] != session["role"]:
                         if request.method == "POST":
                             abort(exceptions.Forbidden)
                         else:
@@ -168,15 +140,6 @@ def _validate_token(token, max_age=0, salt=None):
         except BadSignature:
             pass
     return {}
-
-
-
-def original_referrer():
-    qs = parse_qs(urlparse(request.url)[4])
-    try:
-        return unquote_plus(qs["referrer"][0])
-    except KeyError:
-        return request.referrer
 
 
 
@@ -212,7 +175,7 @@ def render_page(name, active=None, **context):
         navbar = {"app": application,
                   "name": _(session.get("role", "")),
                   "active": active,
-                  "left": _navbars[session["role"]](),
+                  "left": Blueprint.navbars[session["role"]](),
                   "right": right}
     return render_template(name, navbar=navbar, table_form=ActionForm(id="table-form"), **context)
 

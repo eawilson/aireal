@@ -1,0 +1,79 @@
+{% macro render_errors(field) %}
+    <p id="{{ field.attr.id }}-errors" class="help is-danger">{{ field.errors }}</p>
+{% endmacro %}
+
+
+
+{% macro render_field(field) %}                
+    {% if field.__iter__ %}
+        {{ field.label(_class="label") }}
+        {% for subfield in field %}
+            {{ render_field(subfield) }}
+        {% endfor %}
+        {{ render_errors(field) }}
+ 
+    {% else %}
+        <div class="columns">
+            <div class="column is-three-quaters">
+                <div class="field">
+                    {{ field.label(_class="label") }}
+                
+                    {% if field.element == "select" %}
+                        {% if field.attr["multiple"] %}
+                            {% if field.errors %}
+                                <div class="control"><div class="select is-multiple is-danger">{{ field() }}</div></div>
+                                {{ render_errors(field) }}
+                            {% else %}
+                                <div class="control"><div class="select is-multiple">{{ field() }}</div></div>
+                            {% endif %}
+                        {% else %}
+                            {% if field.errors %}
+                                <div class="control"><div class="select is-danger">{{ field() }}</div></div>
+                                {{ render_errors(field) }}
+                            {% else %}
+                                <div class="control"><div class="select">{{ field() }}</div></div>
+                            {% endif %}
+                        {% endif %}
+                    
+                    {% elif field.element == "checkbox" %}
+                        {% if field.errors %}
+                            <label class="checkbox">{{ field(_class="is-danger") }} {{ field.details }}</label>
+                            {{ render_errors(field) }}
+                        {% else %}
+                            <label class="checkbox">{{ field() }} {{ field.details }}</label>
+                        {% endif %}
+                    
+                    {% elif field.element == "textarea" %}
+                        {% if field.errors %}
+                            <div class="control">{{ field(_class="textarea is-danger") }}</div>
+                            {{ render_errors(field) }}
+                        {% else %}
+                            <div class="control">{{ field(_class="textarea") }}</div>
+                        {% endif %}
+
+                    {% else %}
+                        {% if field.errors %}
+                            <div class="control">{{ field(_class="input is-danger") }}</div>
+                        {% else %}
+                            <div class="control">{{ field(_class="input") }}</div>
+                        {% endif %}
+                        {{ render_errors(field) }}
+
+                    {% endif %}
+                </div>
+            </div>
+        <div class="column is-one-quater"></div>
+        </div>
+    {% endif %}
+{% endmacro %}
+
+
+
+{% macro render_buttons(buttons) %}
+    {% if buttons.submit %}<input id="submit-button" class="button is-link" type="submit" value="{{ buttons.submit[0] }}" formaction="{{ buttons.submit[1] }}">{% endif %}
+    {% if buttons.back %}<a id="back-button" class="button is-link" href="{{ buttons.back[1] }}">{{ buttons.back[0] }}</a>{% endif %}
+    {% if buttons.danger %}<input id="danger-button" class="button is-danger is-pulled-right" type="submit" value="{{ buttons.danger[0] }}" formaction="{{ buttons.danger[1] }}">{% endif %}
+{% endmacro %}
+
+
+

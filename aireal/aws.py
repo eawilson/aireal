@@ -34,6 +34,7 @@ task_definitions = {}
 preferred_subnet = ""
 
 
+
 def ec2_metadata():
     """ Get metadata about current running instance.
     """
@@ -51,11 +52,14 @@ def ec2_metadata():
     session.headers.update({"X-aws-ec2-metadata-token": response.text})
     
     
-    response = session.get(f"{BASE_URL}/meta-data/placement/availability-zone",
-                           timeout=2.0)
+    response = session.get(f"{BASE_URL}/meta-data/placement/availability-zone", timeout=2.0)
     if response.status_code == 200:
         metadata["AWS_AVAILABILITY_ZONE"] = response.text
         metadata["AWS_REGION"] = response.text[:-1]
+        
+    response = session.get(f"{BASE_URL}/meta-data/instance-id", timeout=2.0)
+    if response.status_code == 200:
+        metadata["AWS_INSTANCE_ID"] = response.text
         
     return metadata
     #response = session.get(f"{BASE_URL}/meta-data/placement/region",
@@ -265,3 +269,30 @@ def run_task(task, command):
     return retval
     
     
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+
+
+
+

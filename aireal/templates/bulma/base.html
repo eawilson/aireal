@@ -54,20 +54,31 @@
         </nav>
         
         <section class="main-section">
+
+            <h6 class="title is-6">{{ title }}<h6>
+
+            {% if breadcrumbs %}
+                <nav class="breadcrumb">
+                    <ul>
+                        {% for name, url, active in breadcrumbs %}
+                            <li {% if active %}class="is-active"{% endif %}><a href="{{ url }}">{{ name }}</a></li> 
+                        {% endfor %}
+                    </ul>
+                </nav>
+            {% endif %}
+
             {% if tabs %}
                 <div class="tabs is-boxed">
                     <ul>
-                        {% for tab in tabs %}
-                            {% if tab.active %}
-                                <li class="is-active"><a href="#">{{ tab.text }}{% if tab.badge %}<span class="tag is-dark">{{ tab.badge }}</span>{% endif %}</a></li>
-                            {% else %}
-                                <li><a href="{{ tab.href }}">{{ tab.text }}{% if tab.badge %}<span class="tag is-dark">{{ tab.badge }}</span>{% endif %}</a></li>
-                            {% endif %}
+                        {% for tab in tabs %}                    
+                            <li{% if tab.href == "#" %} class="is-active"{% endif %}>
+                                <a href="{{ tab.href }}">{{ tab.text }}{% if tab.badge %}<span class="tag is-dark">{{ tab.badge }}</span>{% endif %}</a>
+                            </li>
                         {% endfor %}
                     </ul>
                 </div>
             {% endif %}
-            
+        
             {% block content %}
             {% endblock %}
         </section>

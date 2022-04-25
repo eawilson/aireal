@@ -8,16 +8,17 @@ from ..i18n import _
 
 def admin_navbar():
     return [{"text": _("Users"), "href":  url_for("Admin.list_users")},
+            {"text": _("Projects"), "href":  url_for("Admin.list_projects")},
             {"text": _("Edit"), "href":  url_for("Admin.editmenu")}]
 
-app = Blueprint("Admin", __name__, navbar=admin_navbar)
+Blueprint.navbars["Admin"] = admin_navbar
+app = Blueprint("Admin", __name__)
 
 
 
 @app.route("/admin/edit")
 def editmenu():
-    body = [tablerow(_("Projects"), id="projects"),
-            tablerow(_("Locations"), id="locations"),
+    body = [tablerow(_("Locations"), id="locations"),
             tablerow(_("Location Models"), id="locationmodels"),
             tablerow(_("Pathology Sites"), id="pathologysites")]
     

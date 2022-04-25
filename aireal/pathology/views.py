@@ -13,11 +13,10 @@ from werkzeug import exceptions
 from urllib.parse import quote
 
 from ..utils import Cursor, Transaction, tablerow, unique_key, dict_from_select
-from ..flask import abort, render_template, Blueprint, sign_token, absolute_url_for, build_url, render_page
-from ..wrappers import Local
+from ..flask import abort, render_template, Blueprint, sign_token, build_url, render_page
 from ..logic import perform_edit, perform_delete, perform_restore
 from ..view_helpers import log_table
-from ..i18n import _
+from ..i18n import _, Date, Number
 from ..aws import list_objects, s3_sign_url, run_task, cloudfront_sign_cookies, cloudfront_sign_url
 from ..forms import ActionForm
 
@@ -31,7 +30,8 @@ def pathology_navbar():
   
 
 
-app = Blueprint("Pathology", __name__, navbar=pathology_navbar, template_folder="templates")
+Blueprint.navbars["Pathology"] = pathology_navbar
+app = Blueprint("Pathology", __name__, template_folder="templates")
   
 
 
@@ -51,7 +51,7 @@ def slide_list():
             body.append(tablerow(slide,
                                  pathologysite,
                                  user,
-                                 Local(created_datetime),
+                                 Date(created_datetime),
                                  clinical_details,
                                  status,
                                  deleted=deleted,
@@ -63,7 +63,8 @@ def slide_list():
                {"name": _("Restore"), "href": url_for(".edit_slide", slide_id=0), "class": "deleted", "method": "POST"},
                {"name": _("Log"), "href": url_for(".view_log", slide_id=0)})
     return render_page("table.html",
-                       table={"head": head, "body": body, "actions": actions, "new": url_for(".new_slide"), "title": _("Slides")},
+                       table={"head": head, "body": body, "actions": actions, "new": url_for(".new_slide")}, 
+                       title=_("Slides"),
                        buttons=())
 
 
@@ -93,7 +94,7 @@ def auth_slide(slide_id):
     
     wildcard_url = build_url(tiles_cdn_base_url, "*")
     cookies = cloudfront_sign_cookies(wildcard_url, private_key)
-    destination = absolute_url_for(".view_slide", slide_id=slide_id)
+    destination = url_for(".view_slide", slide_id=slide_id, _external=True)
     
     set_cookies_url = build_url(tiles_cdn_base_url, "set_cookies.html", cookies=cookies, destination=destination)
     return redirect(cloudfront_sign_url(set_cookies_url, private_key))
@@ -116,7 +117,7 @@ def view_slide(slide_id):
         tiles_cdn_base_url= tiles_cdn_base_url[:-1]
     
     dzi_url = build_url(tiles_cdn_base_url, str(slide_id), quote(f"{directory_name}.dzi"))
-    viewer_url = build_url(tiles_cdn_base_url, "staticviewer.html", dzi_url=dzi_url, back_url=absolute_url_for(".slide_list"))
+    viewer_url = build_url(tiles_cdn_base_url, "staticviewer.html", dzi_url=dzi_url, back_url=url_for(".slide_list", _external=True))
     print(viewer_url)
     return redirect(viewer_url)#cloudfront_sign_url(viewer_url, private_key))
     return render_template("viewer.html", dzi_url=dzi_url, name=name)
@@ -175,8 +176,7 @@ def view_log(slide_id):
         cur.fetchone() or abort(exceptions.NotFound)
         
         table = log_table(cur, "slide", slide_id)
-        table["title"] = _("Change Log")
-    return render_page("table.html", table=table, buttons={"back": (_("Back"), url_for(".slide_list"))})
+    return render_page("table.html", table=table, buttons={"back": (_("Back"), url_for(".slide_list"))}, title=_("Change Log"))
 
 
 
@@ -220,7 +220,7 @@ def new_slide():
                                 dt = datetime.fromtimestamp(float(ts)/1000, tz=timezone.utc)
                             except OverflowError:
                                 return ({}, exceptions.BadRequest.code)
-                            existing.append({"timeStamp": ts, "text": str(Local(dt))})
+                            existing.append({"timeStamp": ts, "text": str(Date(dt))})
                 if existing:
                     return {"outcome": "select", "options": existing}
         
@@ -289,7 +289,7 @@ def new_slide():
             deepzoom_url = build_url(tiles_base_url, str(slide_id))
             
             token = sign_token({"slide_id": slide_id, "old_status": "Uploaded", "new_status": "Ready"}, salt="deepzoom_callback")
-            callback_url = absolute_url_for(".deepzoom_callback", token=token)
+            callback_url = url_for(".deepzoom_callback", token=token, _external=True)
             run_task("deepzoom", ["--input", upload_url,
                                   "--output", deepzoom_url,
                                   "--name", directory,
@@ -305,7 +305,7 @@ def new_slide():
 
 
 
-@app.route("/slides/callback/<string:token>", signature="deepzoom_callback", max_age=60*60)
+@app.route("/slides/callback/<string:token>", max_age=60*60)
 def deepzoom_callback(token):
     with Transaction() as trans:
         with trans.cursor() as cur:

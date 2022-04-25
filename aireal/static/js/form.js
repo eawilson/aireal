@@ -63,11 +63,11 @@
         ajaxGet(url.href, insertField, e.target);
         }
     
-    dynamics = inputs.querySelectorAll('.get-dynamic-fields');
+    dynamics = document.querySelectorAll('.get-dynamic-fields');
     for (var i = 0; i < dynamics.length; ++i) {
         dynamics[i].addEventListener('change', handleChange);
         }
-
+    
     })();
 
 
